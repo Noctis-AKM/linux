@@ -128,7 +128,10 @@ struct inode *ubifs_iget(struct super_block *sb, unsigned long inum)
 	if (err)
 		goto out_ino;
 
-	inode->i_flags |= (S_NOCMTIME | S_NOATIME);
+	inode->i_flags |= S_NOCMTIME;
+#ifndef CONFIG_UBIFS_ATIME_SUPPORT
+	inode->i_flags |= S_NOATIME;
+#endif
 	set_nlink(inode, le32_to_cpu(ino->nlink));
 	i_uid_write(inode, le32_to_cpu(ino->uid));
 	i_gid_write(inode, le32_to_cpu(ino->gid));
@@ -378,16 +381,61 @@ done:
 	clear_inode(inode);
 }
 
+#ifdef CONFIG_UBIFS_ATIME_SUPPORT
+/*
+ * There is only one possible caller of ubifs_dirty_inode without holding
+ * ui->ui_mutex, file_accessed. We are going to support atime if user
+ * set UBIFS_ATIME_SUPPORT=y in Kconfig. In that case, ubifs_dirty_inode
+ * need to lock ui->ui_mutex by itself and do a budget by itself.
+ */
 static void ubifs_dirty_inode(struct inode *inode, int flags)
 {
 	struct ubifs_inode *ui = ubifs_inode(inode);
+	int locked = mutex_is_locked(&ui->ui_mutex);
+	struct ubifs_info *c = inode->i_sb->s_fs_info;
+	int ret = 0;
 
-	ubifs_assert(mutex_is_locked(&ui->ui_mutex));
+	if (!locked)
+		mutex_lock(&ui->ui_mutex);
+
 	if (!ui->dirty) {
+		if (!locked) {
+			/*
+			 * It's a little tricky here, there is only one
+			 * possible user of ubifs_dirty_inode did not do
+			 * a budget for this inode. At the same time, this
+			 * user is not holding the ui->ui_mutex. Then if
+			 * we found ui->ui_mutex is not locked, we can say:
+			 * we need to do a budget in ubifs_dirty_inode here.
+			 */
+			struct ubifs_budget_req req = { .dirtied_ino = 1,
+					.dirtied_ino_d = ALIGN(ui->data_len, 8) };
+
+			ret = ubifs_budget_space(c, &req);
+			if (ret)
+				goto out;
+		}
 		ui->dirty = 1;
 		dbg_gen("inode %lu",  inode->i_ino);
 	}
+
+out:
+	if (!locked)
+		mutex_unlock(&ui->ui_mutex);
+	return;
 }
+#else
+static void ubifs_dirty_inode(struct inode *inode, int flags)
+{
+        struct ubifs_inode *ui = ubifs_inode(inode);
+
+        ubifs_assert(mutex_is_locked(&ui->ui_mutex));
+        if (!ui->dirty) {
+                ui->dirty = 1;
+                dbg_gen("inode %lu",  inode->i_ino);
+        }
+}
+#endif
 
 static int ubifs_statfs(struct dentry *dentry, struct kstatfs *buf)
 {
@@ -2138,7 +2186,17 @@ static struct dentry *ubifs_mount(struct file_system_type *fs_type, int flags,
 		if (err)
 			goto out_deact;
 		/* We do not support atime */
-		sb->s_flags |= MS_ACTIVE | MS_NOATIME;
+		sb->s_flags |= MS_ACTIVE;
+#ifndef CONFIG_UBIFS_ATIME_SUPPORT
+		sb->s_flags |= MS_NOATIME;
+#else
+		ubifs_warn(c, "************WARNING START****************");
+		ubifs_warn(c, "Ubifs is supporting atime now, that would");
+		ubifs_warn(c, "probably damage your flash. If you are not");
+		ubifs_warn(c, "sure about it, please set UBIFS_ATIME_SUPPORT");
+		ubifs_warn(c, "to 'N'.");
+		ubifs_warn(c, "************WARNING END******************");
+#endif
 	}
 
 	/* 'fill_super()' opens ubi again so we must close it here */
