@@ -128,7 +128,10 @@ struct inode *ubifs_iget(struct super_block *sb, unsigned long inum)
 	if (err)
 		goto out_ino;
 
-	inode->i_flags |= (S_NOCMTIME | S_NOATIME);
+	inode->i_flags |= S_NOCMTIME;
+#ifndef CONFIG_UBIFS_ATIME_SUPPORT
+	inode->i_flags |= S_NOATIME;
+#endif
 	set_nlink(inode, le32_to_cpu(ino->nlink));
 	i_uid_write(inode, le32_to_cpu(ino->uid));
 	i_gid_write(inode, le32_to_cpu(ino->gid));
@@ -380,7 +383,7 @@ done:
 
 static void ubifs_dirty_inode(struct inode *inode, int flags)
 {
-	struct ubifs_inode *ui = ubifs_inode(inode);
+        struct ubifs_inode *ui = ubifs_inode(inode);
 
 	ubifs_assert(mutex_is_locked(&ui->ui_mutex));
 	if (!ui->dirty) {
@@ -2138,7 +2141,17 @@ static struct dentry *ubifs_mount(struct file_system_type *fs_type, int flags,
 		if (err)
 			goto out_deact;
 		/* We do not support atime */
-		sb->s_flags |= MS_ACTIVE | MS_NOATIME;
+		sb->s_flags |= MS_ACTIVE;
+#ifndef CONFIG_UBIFS_ATIME_SUPPORT
+		sb->s_flags |= MS_NOATIME;
+#else
+		ubifs_warn(c, "************WARNING START****************");
+		ubifs_warn(c, "Ubifs is supporting atime now, that would");
+		ubifs_warn(c, "probably damage your flash. If you are not");
+		ubifs_warn(c, "sure about it, please set UBIFS_ATIME_SUPPORT");
+		ubifs_warn(c, "to 'N'.");
+		ubifs_warn(c, "************WARNING END******************");
+#endif
 	}
 
 	/* 'fill_super()' opens ubi again so we must close it here */

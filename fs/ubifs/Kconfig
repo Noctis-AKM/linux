@@ -35,3 +35,14 @@ config UBIFS_FS_ZLIB
 	default y
 	help
 	  Zlib compresses better than LZO but it is slower. Say 'N' if unsure.
+
+config UBIFS_ATIME_SUPPORT
+	bool "Access time support" if UBIFS_FS
+	depends on UBIFS_FS
+	default n
+	help
+	  This option allows ubifs to support atime. -o strictatime is harmful to
+	  your flash, we don't suggest it. But relatime and lazytime are much
+	  better.
+
+	  If unsure, say 'N'
