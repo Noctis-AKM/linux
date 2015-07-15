@@ -605,6 +605,37 @@ rescan:
 
 EXPORT_SYMBOL(get_super);
 
+struct super_block *get_super_cdev(struct cdev *cdev)
+{
+	struct super_block *sb;
+
+	if (!cdev)
+		return NULL;
+
+	spin_lock(&sb_lock);
+rescan:
+	list_for_each_entry(sb, &super_blocks, s_list) {
+		if (hlist_unhashed(&sb->s_instances))
+			continue;
+		if (sb->s_cdev == cdev) {
+			sb->s_count++;
+			spin_unlock(&sb_lock);
+			down_read(&sb->s_umount);
+			/* still alive? */
+			if (sb->s_root && (sb->s_flags & MS_BORN))
+				return sb;
+			up_read(&sb->s_umount);
+			/* nope, got unmounted */
+			spin_lock(&sb_lock);
+			__put_super(sb);
+			goto rescan;
+		}
+	}
+	spin_unlock(&sb_lock);
+	return NULL;
+}
+EXPORT_SYMBOL(get_super_cdev);
+
 /**
  *	get_super_thawed - get thawed superblock of a device
  *	@bdev: device to get the superblock for
@@ -627,6 +658,20 @@ struct super_block *get_super_thawed(struct block_device *bdev)
 	}
 }
 EXPORT_SYMBOL(get_super_thawed);
+
+struct super_block *get_super_cdev_thawed(struct cdev *cdev)
+{
+	while (1) {
+		struct super_block *s = get_super_cdev(cdev);
+		if (!s || s->s_writers.frozen == SB_UNFROZEN)
+			return s;
+		up_read(&s->s_umount);
+		wait_event(s->s_writers.wait_unfrozen,
+			   s->s_writers.frozen == SB_UNFROZEN);
+		put_super(s);
+	}
+}
+EXPORT_SYMBOL(get_super_cdev_thawed);
 
 /**
  * get_active_super - get an active reference to the superblock of a device
