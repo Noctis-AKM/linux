@@ -413,6 +413,7 @@ static int free_dqentry(struct qtree_mem_dqinfo *info, struct dquot *dquot,
 	if (!buf)
 		return -ENOMEM;
 	if (dquot->dq_off >> info->dqi_blocksize_bits != blk) {
+		WARN_ON(1);
 		quota_error(dquot->dq_sb, "Quota structure has offset to "
 			"other block (%u) than it should (%u)", blk,
 			(uint)(dquot->dq_off >> info->dqi_blocksize_bits));

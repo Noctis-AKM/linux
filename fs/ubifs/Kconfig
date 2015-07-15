@@ -46,3 +46,13 @@ config UBIFS_ATIME_SUPPORT
 	  better.
 
 	  If unsure, say 'N'
+
+config UBIFS_QUOTA_SUPPORT
+	bool "Disk Quota support" if UBIFS_FS
+	depends on UBIFS_FS
+	default n
+	help
+	  This option allows ubifs to support disk quota. We reuse the quota
+	  provided by VFS.
+
+	  If unsure, say 'N'

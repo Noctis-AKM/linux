@@ -41,6 +41,7 @@
  */
 
 #include "ubifs.h"
+#include <linux/quotaops.h>
 
 /**
  * inherit_flags - inherit flags of the parent inode.
@@ -90,12 +91,18 @@ struct inode *ubifs_new_inode(struct ubifs_info *c, const struct inode *dir,
 {
 	struct inode *inode;
 	struct ubifs_inode *ui;
+	int err = 0;
 
 	inode = new_inode(c->vfs_sb);
-	ui = ubifs_inode(inode);
 	if (!inode)
 		return ERR_PTR(-ENOMEM);
 
+	dquot_initialize(inode);
+        err = dquot_alloc_inode(inode);
+        if (err)
+                goto fail_drop;
+
+	ui = ubifs_inode(inode);
 	/*
 	 * Set 'S_NOCMTIME' to prevent VFS form updating [mc]time of inodes and
 	 * marking them dirty in file write path (see 'file_update_time()').
@@ -148,8 +155,8 @@ struct inode *ubifs_new_inode(struct ubifs_info *c, const struct inode *dir,
 			spin_unlock(&c->cnt_lock);
 			ubifs_err(c, "out of inode numbers");
 			make_bad_inode(inode);
-			iput(inode);
-			return ERR_PTR(-EINVAL);
+			err = -EINVAL;
+			goto fail_drop;
 		}
 		ubifs_warn(c, "running out of inode numbers (current %lu, max %u)",
 			   (unsigned long)c->highest_inum, INUM_WATERMARK);
@@ -166,6 +173,11 @@ struct inode *ubifs_new_inode(struct ubifs_info *c, const struct inode *dir,
 	ui->creat_sqnum = ++c->max_sqnum;
 	spin_unlock(&c->cnt_lock);
 	return inode;
+
+fail_drop:
+	dquot_drop(inode);
+	iput(inode);
+	return ERR_PTR(err);
 }
 
 static int dbg_check_name(const struct ubifs_info *c,
@@ -263,6 +275,8 @@ static int ubifs_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	err = ubifs_budget_space(c, &req);
 	if (err)
 		return err;
+
+	dquot_initialize(dir);
 
 	inode = ubifs_new_inode(c, dir, mode);
 	if (IS_ERR(inode)) {
@@ -525,6 +539,8 @@ static int ubifs_link(struct dentry *old_dentry, struct inode *dir,
 	if (err)
 		return err;
 
+	dquot_initialize(dir);
+
 	lock_2_inodes(dir, inode);
 	inc_nlink(inode);
 	ihold(inode);
@@ -560,6 +576,7 @@ static int ubifs_unlink(struct inode *dir, struct dentry *dentry)
 	int err, budgeted = 1;
 	struct ubifs_budget_req req = { .mod_dent = 1, .dirtied_ino = 2 };
 	unsigned int saved_nlink = inode->i_nlink;
+	loff_t quota_size = inode->i_size;
 
 	/*
 	 * Budget request settings: deletion direntry, deletion inode (+1 for
@@ -593,7 +610,11 @@ static int ubifs_unlink(struct inode *dir, struct dentry *dentry)
 	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 1, 0);
 	if (err)
 		goto out_cancel;
+
 	unlock_2_inodes(dir, inode);
+
+	dquot_initialize(inode);
+	dquot_free_space(inode, quota_size);
 
 	if (budgeted)
 		ubifs_release_budget(c, &req);
@@ -602,6 +623,7 @@ static int ubifs_unlink(struct inode *dir, struct dentry *dentry)
 		c->bi.nospace = c->bi.nospace_rp = 0;
 		smp_wmb();
 	}
+
 	return 0;
 
 out_cancel:
@@ -725,6 +747,8 @@ static int ubifs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	if (err)
 		return err;
 
+	dquot_initialize(dir);
+
 	inode = ubifs_new_inode(c, dir, S_IFDIR | mode);
 	if (IS_ERR(inode)) {
 		err = PTR_ERR(inode);
@@ -803,6 +827,8 @@ static int ubifs_mknod(struct inode *dir, struct dentry *dentry,
 		return err;
 	}
 
+	dquot_initialize(dir);
+
 	inode = ubifs_new_inode(c, dir, mode);
 	if (IS_ERR(inode)) {
 		kfree(dev);
@@ -873,6 +899,8 @@ static int ubifs_symlink(struct inode *dir, struct dentry *dentry,
 	err = ubifs_budget_space(c, &req);
 	if (err)
 		return err;
+
+	dquot_initialize(dir);
 
 	inode = ubifs_new_inode(c, dir, S_IFLNK | S_IRWXUGO);
 	if (IS_ERR(inode)) {
@@ -1002,6 +1030,8 @@ static int ubifs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	if (unlink)
 		ubifs_assert(mutex_is_locked(&new_inode->i_mutex));
 
+	dquot_initialize(old_dir);
+	dquot_initialize(new_dir);
 
 	if (unlink && is_dir) {
 		err = check_dir_empty(c, new_inode);

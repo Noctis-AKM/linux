@@ -53,8 +53,9 @@
 #include <linux/mount.h>
 #include <linux/namei.h>
 #include <linux/slab.h>
+#include <linux/quotaops.h>
 
-static int read_block(struct inode *inode, void *addr, unsigned int block,
+int read_block(struct inode *inode, void *addr, unsigned int block,
 		      struct ubifs_data_node *dn)
 {
 	struct ubifs_info *c = inode->i_sb->s_fs_info;
@@ -431,8 +432,10 @@ static int ubifs_write_begin(struct file *file, struct address_space *mapping,
 	struct ubifs_inode *ui = ubifs_inode(inode);
 	pgoff_t index = pos >> PAGE_CACHE_SHIFT;
 	int uninitialized_var(err), appending = !!(pos + len > inode->i_size);
+	int quota_size = 0;
 	int skipped_read = 0;
 	struct page *page;
+	int ret = 0;
 
 	ubifs_assert(ubifs_inode(inode)->ui_size == inode->i_size);
 	ubifs_assert(!c->ro_media && !c->ro_mount);
@@ -440,10 +443,21 @@ static int ubifs_write_begin(struct file *file, struct address_space *mapping,
 	if (unlikely(c->ro_error))
 		return -EROFS;
 
+	quota_size = ((pos + len) - inode->i_size);
+	if (quota_size < 0)
+		quota_size = 0;
+	dquot_initialize(inode);
+	ret = dquot_alloc_space_nodirty(inode, quota_size);
+	//ret = dquot_alloc_block(inode, 1);
+	if (unlikely(ret))
+		goto err;
+
 	/* Try out the fast-path part first */
 	page = grab_cache_page_write_begin(mapping, index, flags);
-	if (unlikely(!page))
-		return -ENOMEM;
+	if (unlikely(!page)) {
+		ret = -ENOMEM;
+		goto free_quot;
+	}
 
 	if (!PageUptodate(page)) {
 		/* The page is not loaded from the flash */
@@ -497,7 +511,9 @@ static int ubifs_write_begin(struct file *file, struct address_space *mapping,
 		unlock_page(page);
 		page_cache_release(page);
 
-		return write_begin_slow(mapping, pos, len, pagep, flags);
+		ret = write_begin_slow(mapping, pos, len, pagep, flags);
+		if (unlikely(ret))
+			goto free_quot;
 	}
 
 	/*
@@ -507,7 +523,12 @@ static int ubifs_write_begin(struct file *file, struct address_space *mapping,
 	 * otherwise. This is an optimization (slightly hacky though).
 	 */
 	*pagep = page;
-	return 0;
+
+	return ret;
+free_quot:
+	dquot_free_space_nodirty(inode, len);
+err:
+	return ret;
 
 }
 
@@ -1108,6 +1129,7 @@ static int do_truncation(struct ubifs_info *c, struct inode *inode,
 	int err;
 	struct ubifs_budget_req req;
 	loff_t old_size = inode->i_size, new_size = attr->ia_size;
+	loff_t quota_size = (old_size - new_size);
 	int offset = new_size & (UBIFS_BLOCK_SIZE - 1), budgeted = 1;
 	struct ubifs_inode *ui = ubifs_inode(inode);
 
@@ -1187,6 +1209,9 @@ static int do_truncation(struct ubifs_info *c, struct inode *inode,
 	do_attr_changes(inode, attr);
 	err = ubifs_jnl_truncate(c, inode, old_size, new_size);
 	mutex_unlock(&ui->ui_mutex);
+	if (quota_size < 0)
+		quota_size = 0;
+	dquot_free_space(inode, quota_size);
 
 out_budg:
 	if (budgeted)
@@ -1223,6 +1248,13 @@ static int do_setattr(struct ubifs_info *c, struct inode *inode,
 
 	if (attr->ia_valid & ATTR_SIZE) {
 		dbg_gen("size %lld -> %lld", inode->i_size, new_size);
+		if (new_size > inode->i_size) {
+			err = dquot_alloc_space_nodirty(inode, new_size - inode->i_size);
+			if (err)
+				return err;
+		} else {
+			dquot_free_space_nodirty(inode, inode->i_size - new_size);
+		}
 		truncate_setsize(inode, new_size);
 	}
 
@@ -1269,6 +1301,15 @@ int ubifs_setattr(struct dentry *dentry, struct iattr *attr)
 	err = dbg_check_synced_i_size(c, inode);
 	if (err)
 		return err;
+
+	if (is_quota_modification(inode, attr))
+		dquot_initialize(inode);
+	if ((attr->ia_valid & ATTR_UID && !uid_eq(attr->ia_uid, inode->i_uid)) ||
+	    (attr->ia_valid & ATTR_GID && !gid_eq(attr->ia_gid, inode->i_gid))) {
+		err = dquot_transfer(inode, attr);
+		if (err)
+			return err;
+	}
 
 	if ((attr->ia_valid & ATTR_SIZE) && attr->ia_size < inode->i_size)
 		/* Truncation to a smaller size */

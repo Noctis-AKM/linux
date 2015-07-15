@@ -1625,6 +1625,7 @@ int __dquot_alloc_space(struct inode *inode, qsize_t number, int flags)
 	int reserve = flags & DQUOT_SPACE_RESERVE;
 	struct dquot **dquots;
 
+
 	if (!dquot_active(inode)) {
 		inode_incr_space(inode, number, reserve);
 		goto out;
@@ -1653,6 +1654,7 @@ int __dquot_alloc_space(struct inode *inode, qsize_t number, int flags)
 			dquot_resv_space(dquots[cnt], number);
 		else
 			dquot_incr_space(dquots[cnt], number);
+
 	}
 	inode_incr_space(inode, number, reserve);
 	spin_unlock(&dq_data_lock);
@@ -2199,7 +2201,6 @@ static int vfs_load_quota_inode(struct inode *inode, int type, int format_id,
 		error = -EINVAL;
 		goto out_fmt;
 	}
-
 	if (!(dqopt->flags & DQUOT_QUOTA_SYS_FILE)) {
 		/* As we bypass the pagecache we must now flush all the
 		 * dirty data and invalidate caches so that kernel sees
@@ -2208,7 +2209,8 @@ static int vfs_load_quota_inode(struct inode *inode, int type, int format_id,
 		 * of the cache could fail because of other unrelated dirty
 		 * data */
 		sync_filesystem(sb);
-		invalidate_bdev(sb->s_bdev);
+		if (sb->s_bdev)
+			invalidate_bdev(sb->s_bdev);
 	}
 	mutex_lock(&dqopt->dqonoff_mutex);
 	if (sb_has_quota_loaded(sb, type)) {
@@ -2324,6 +2326,7 @@ int dquot_quota_on(struct super_block *sb, int type, int format_id,
 	int error = security_quota_on(path->dentry);
 	if (error)
 		return error;
+
 	/* Quota file not on the same filesystem? */
 	if (path->dentry->d_sb != sb)
 		error = -EXDEV;

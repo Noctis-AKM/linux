@@ -36,6 +36,8 @@
 #include <linux/mount.h>
 #include <linux/math64.h>
 #include <linux/writeback.h>
+#include <linux/quotaops.h>
+#include <linux/cdev.h>
 #include "ubifs.h"
 
 /*
@@ -353,12 +355,17 @@ static void ubifs_evict_inode(struct inode *inode)
 
 	truncate_inode_pages_final(&inode->i_data);
 
-	if (inode->i_nlink)
+	if (inode->i_nlink) {
+		dquot_drop(inode);
 		goto done;
+	}
 
-	if (is_bad_inode(inode))
+	if (is_bad_inode(inode)) {
+		dquot_drop(inode);
 		goto out;
+	}
 
+	dquot_initialize(inode);
 	ui->ui_size = inode->i_size = 0;
 	err = ubifs_jnl_delete_inode(c, inode);
 	if (err)
@@ -368,7 +375,7 @@ static void ubifs_evict_inode(struct inode *inode)
 		 */
 		ubifs_err(c, "can't delete inode %lu, error %d",
 			  inode->i_ino, err);
-
+	dquot_free_inode(inode);
 out:
 	if (ui->dirty)
 		ubifs_release_dirty_inode_budget(c, ui);
@@ -381,12 +388,11 @@ done:
 	clear_inode(inode);
 }
 
-#ifdef CONFIG_UBIFS_ATIME_SUPPORT
+#if defined(CONFIG_UBIFS_ATIME_SUPPORT) || defined(CONFIG_UBIFS_QUOTA_SUPPORT)
 /*
- * There is only one possible caller of ubifs_dirty_inode without holding
- * ui->ui_mutex, file_accessed. We are going to support atime if user
- * set UBIFS_ATIME_SUPPORT=y in Kconfig. In that case, ubifs_dirty_inode
- * need to lock ui->ui_mutex by itself and do a budget by itself.
+ * When the ubifs_dirty_inode is called by vfs, it will not lock
+ * ui->ui_mutex at first. In that case, ubifs_dirty_inode need to
+ * lock ui->ui_mutex by itself and do a budget by itself.
  */
 static void ubifs_dirty_inode(struct inode *inode, int flags)
 {
@@ -401,8 +407,7 @@ static void ubifs_dirty_inode(struct inode *inode, int flags)
 	if (!ui->dirty) {
 		if (!locked) {
 			/*
-			 * It's a little tricky here, there is only one
-			 * possible user of ubifs_dirty_inode did not do
+			 * It's a little tricky here, vfs did not do
 			 * a budget for this inode. At the same time, this
 			 * user is not holding the ui->ui_mutex. Then if
 			 * we found ui->ui_mutex is not locked, we can say:
@@ -483,6 +488,12 @@ static int ubifs_show_options(struct seq_file *s, struct dentry *root)
 	else if (c->mount_opts.chk_data_crc == 1)
 		seq_puts(s, ",no_chk_data_crc");
 
+	if (c->usrquota)
+		seq_puts(s, ",usrquota");
+
+	if (c->grpquota)
+		seq_puts(s, ",grpquota");
+
 	if (c->mount_opts.override_compr) {
 		seq_printf(s, ",compr=%s",
 			   ubifs_compr_name(c->mount_opts.compr_type));
@@ -503,6 +514,8 @@ static int ubifs_sync_fs(struct super_block *sb, int wait)
 	 */
 	if (!wait)
 		return 0;
+
+	dquot_writeback_dquots(sb, -1);
 
 	/*
 	 * Synchronize write buffers, because 'ubifs_run_commit()' does not
@@ -953,6 +966,188 @@ static int check_volume_empty(struct ubifs_info *c)
 	return 0;
 }
 
+#ifdef CONFIG_QUOTA
+static ssize_t ubifs_quota_read(struct super_block *sb, int type, char *data,
+			       size_t len, loff_t off)
+{
+	struct inode *inode = sb_dqopt(sb)->files[type];
+	unsigned long block = off >> UBIFS_BLOCK_SHIFT;
+	int offset = off & (sb->s_blocksize - 1);
+	int tocopy = 0;
+	size_t toread;
+	loff_t i_size = i_size_read(inode);
+	char *block_buf;
+	struct ubifs_data_node *dn;
+	int ret, err = 0;
+
+	if (off > i_size)
+		goto out;
+
+	if (off + len > i_size)
+		len = i_size - off;
+	toread = len;
+
+	dn = kmalloc(UBIFS_MAX_DATA_NODE_SZ, GFP_NOFS);
+	if (!dn) {
+		err = -ENOMEM;
+		goto out;
+	}
+
+	block_buf = kmalloc(sb->s_blocksize, GFP_NOFS);
+	if (!block_buf) {
+		err = -ENOMEM;
+		goto free_dn;
+	}
+
+	if (offset) {
+		/* Read the un-aligned data in first block */
+		tocopy = sb->s_blocksize - offset;
+		if (toread < tocopy)
+			tocopy = toread;
+
+		ret = read_block(inode, block_buf, block, dn);
+		if (ret) {
+			err = ret;
+			if (err != ENOENT) {
+				goto free_buf;
+			}
+		}
+
+		memcpy(data, block_buf + offset, tocopy);
+
+		block++;
+		toread -= tocopy;
+		data += tocopy;
+		tocopy = 0;
+	}
+
+	while (toread > 0) {
+		tocopy = sb->s_blocksize < toread ?
+				sb->s_blocksize : toread;
+
+		/* Break to read the last block */
+		if (tocopy < sb->s_blocksize)
+			break;
+
+		ret = read_block(inode, data, block, dn);
+		if (ret) {
+			err = ret;
+			if (err != -ENOENT)
+				goto free_buf;
+		}
+		block++;;
+		toread -= tocopy;
+		data += tocopy;
+		tocopy = 0;
+	}
+
+	if (tocopy) {
+		/* Read the data in last block */
+		ret = read_block(inode, block_buf, block, dn);
+		if (ret) {
+			err = ret;
+			if (err != ENOENT) {
+				goto free_buf;
+			}
+		}
+
+		memcpy(data, block_buf, tocopy);
+	}
+free_buf:
+	kfree(block_buf);
+free_dn:
+	kfree(dn);
+out:
+	if (!err) {
+		return len;
+	}
+	return err;
+}
+
+static ssize_t ubifs_quota_write(struct super_block *sb, int type,
+				const char *data, size_t len, loff_t off)
+{
+	struct inode *inode = sb_dqopt(sb)->files[type];
+	unsigned long block = off >> UBIFS_BLOCK_SHIFT;
+	struct ubifs_info *c = inode->i_sb->s_fs_info;
+	int offset = off & (sb->s_blocksize - 1);
+	union ubifs_key key;
+	int tocopy = 0;
+	size_t towrite = len;
+	int ret, err = 0;
+
+	if (offset) {
+		struct ubifs_data_node *dn;
+		char *block_buf;
+
+		dn = kmalloc(UBIFS_MAX_DATA_NODE_SZ, GFP_NOFS);
+		if (!dn) {
+			err = -ENOMEM;
+			goto out;
+		}
+
+		block_buf = kmalloc(sb->s_blocksize, GFP_NOFS);
+		if (!block_buf) {
+			err = -ENOMEM;
+			kfree(dn);
+			goto out;
+		}
+
+		/* Write the un-aligned data in first block */
+		tocopy = sb->s_blocksize - offset;
+		if (towrite < tocopy)
+			tocopy = towrite;
+
+		ret = read_block(inode, block_buf, block, dn);
+		if (ret) {
+			err = ret;
+			if (err != ENOENT) {
+				kfree(block_buf);
+				kfree(dn);
+				goto out;
+			}
+		}
+
+		memcpy(block_buf + offset, data, tocopy);
+
+		data_key_init(c, &key, inode->i_ino, block);
+		err = ubifs_jnl_write_data(c, inode, &key, block_buf, sb->s_blocksize);
+		if (err) {
+			kfree(block_buf);
+			kfree(dn);
+			goto out;
+		}
+
+		block++;
+		towrite -= tocopy;
+		data += tocopy;
+	}
+
+	while (towrite > 0) {
+		tocopy = sb->s_blocksize < towrite ?
+				sb->s_blocksize : towrite;
+
+		data_key_init(c, &key, inode->i_ino, block);
+		err = ubifs_jnl_write_data(c, inode, &key, data, tocopy);
+		if (err)
+			break;
+		block++;;
+		towrite -= tocopy;
+		data += tocopy;
+	}
+
+out:
+	if (!err)
+		return len;
+	return err;
+}
+
+static struct dquot **ubifs_get_dquots(struct inode *inode)
+{
+	return ubifs_inode(inode)->i_dquot;
+}
+#endif
+
 /*
  * UBIFS mount options.
  *
@@ -973,6 +1168,10 @@ enum {
 	Opt_chk_data_crc,
 	Opt_no_chk_data_crc,
 	Opt_override_compr,
+	Opt_ignore,
+	Opt_quota,
+	Opt_usrquota,
+	Opt_grpquota,
 	Opt_err,
 };
 
@@ -984,6 +1183,10 @@ static const match_table_t tokens = {
 	{Opt_chk_data_crc, "chk_data_crc"},
 	{Opt_no_chk_data_crc, "no_chk_data_crc"},
 	{Opt_override_compr, "compr=%s"},
+	{Opt_ignore, "noquota"},
+	{Opt_quota, "quota"},
+	{Opt_usrquota, "usrquota"},
+	{Opt_grpquota, "grpquota"},
 	{Opt_err, NULL},
 };
 
@@ -1084,6 +1287,21 @@ static int ubifs_parse_options(struct ubifs_info *c, char *options,
 			c->default_compr = c->mount_opts.compr_type;
 			break;
 		}
+#ifdef CONFIG_QUOTA
+		case Opt_quota:
+		case Opt_usrquota:
+			c->usrquota = 1;
+			break;
+		case Opt_grpquota:
+			c->grpquota = 1;
+			break;
+#else
+		case Opt_quota:
+		case Opt_usrquota:
+		case Opt_grpquota:
+			ubifs_err(c, "quota operations not supported");
+			break;
+#endif
 		default:
 		{
 			unsigned long flag;
@@ -1793,6 +2011,7 @@ static void ubifs_remount_ro(struct ubifs_info *c)
 	err = dbg_check_space_info(c);
 	if (err)
 		ubifs_ro_mode(c, err);
+
 	mutex_unlock(&c->umount_mutex);
 }
 
@@ -1895,6 +2114,7 @@ static int ubifs_remount_fs(struct super_block *sb, int *flags, char *data)
 			ubifs_msg(c, "cannot re-mount R/W - UBI volume is R/O");
 			return -EROFS;
 		}
+		dquot_resume(sb, -1);
 		err = ubifs_remount_rw(c);
 		if (err)
 			return err;
@@ -1903,6 +2123,7 @@ static int ubifs_remount_fs(struct super_block *sb, int *flags, char *data)
 			ubifs_msg(c, "cannot re-mount R/O due to prior errors");
 			return -EROFS;
 		}
+		dquot_suspend(sb, -1);
 		ubifs_remount_ro(c);
 	}
 
@@ -1929,6 +2150,11 @@ const struct super_operations ubifs_super_operations = {
 	.remount_fs    = ubifs_remount_fs,
 	.show_options  = ubifs_show_options,
 	.sync_fs       = ubifs_sync_fs,
+#ifdef CONFIG_QUOTA
+	.quota_read    = ubifs_quota_read,
+	.quota_write   = ubifs_quota_write,
+	.get_dquots    = ubifs_get_dquots,
+#endif
 };
 
 /**
@@ -2076,6 +2302,8 @@ static int ubifs_fill_super(struct super_block *sb, void *data, int silent)
 		goto out_bdi;
 
 	sb->s_bdi = &c->bdi;
+	sb->s_cdev = ubi_get_volume_cdev(c->ubi);
+	sb->s_dev = sb->s_cdev->dev;
 	sb->s_fs_info = c;
 	sb->s_magic = UBIFS_SUPER_MAGIC;
 	sb->s_blocksize = UBIFS_BLOCK_SIZE;
@@ -2085,7 +2313,11 @@ static int ubifs_fill_super(struct super_block *sb, void *data, int silent)
 		sb->s_maxbytes = c->max_inode_sz = MAX_LFS_FILESIZE;
 	sb->s_op = &ubifs_super_operations;
 	sb->s_xattr = ubifs_xattr_handlers;
-
+#ifdef CONFIG_QUOTA
+	sb->dq_op = &dquot_operations;
+	sb->s_qcop = &dquot_quotactl_ops;
+	sb->s_quota_types = QTYPE_MASK_USR | QTYPE_MASK_GRP;
+#endif
 	mutex_lock(&c->umount_mutex);
 	err = mount_ubifs(c);
 	if (err) {
@@ -2132,7 +2364,7 @@ static int sb_test(struct super_block *sb, void *data)
 static int sb_set(struct super_block *sb, void *data)
 {
 	sb->s_fs_info = data;
-	return set_anon_super(sb, NULL);
+	return set_anon_super(sb, data);
 }
 
 static struct dentry *ubifs_mount(struct file_system_type *fs_type, int flags,
