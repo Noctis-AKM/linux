@@ -2208,7 +2208,8 @@ static int vfs_load_quota_inode(struct inode *inode, int type, int format_id,
 		 * of the cache could fail because of other unrelated dirty
 		 * data */
 		sync_filesystem(sb);
-		invalidate_bdev(sb->s_bdev);
+		if (sb->s_bdev)
+			invalidate_bdev(sb->s_bdev);
 	}
 	mutex_lock(&dqopt->dqonoff_mutex);
 	if (sb_has_quota_loaded(sb, type)) {
