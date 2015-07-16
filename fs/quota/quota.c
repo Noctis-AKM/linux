@@ -17,6 +17,7 @@
 #include <linux/quotaops.h>
 #include <linux/types.h>
 #include <linux/writeback.h>
+#include <linux/cdev.h>
 
 static int check_quotactl_permission(struct super_block *sb, int type, int cmd,
 				     qid_t id)
@@ -726,29 +727,40 @@ static int quotactl_cmd_write(int cmd)
  */
 static struct super_block *quotactl_block(const char __user *special, int cmd)
 {
+	struct super_block *sb = NULL;
+	struct filename *tmp = getname(special);
+	struct cdev *cdev = NULL;
+
 #ifdef CONFIG_BLOCK
 	struct block_device *bdev;
-	struct super_block *sb;
-	struct filename *tmp = getname(special);
 
 	if (IS_ERR(tmp))
 		return ERR_CAST(tmp);
 	bdev = lookup_bdev(tmp->name);
-	putname(tmp);
 	if (IS_ERR(bdev))
-		return ERR_CAST(bdev);
+		goto not_block;
 	if (quotactl_cmd_write(cmd))
 		sb = get_super_thawed(bdev);
 	else
 		sb = get_super(bdev);
 	bdput(bdev);
-	if (!sb)
-		return ERR_PTR(-ENODEV);
+	goto out;
 
-	return sb;
-#else
-	return ERR_PTR(-ENODEV);
+not_block:
 #endif
+	cdev = lookup_cdev(tmp->name);
+	if (IS_ERR(cdev))
+		goto out;
+	if (quotactl_cmd_write(cmd))
+		sb = get_super_cdev_thawed(cdev);
+	else
+		sb = get_super_cdev(cdev);
+	cdev_put(cdev);
+out:
+	putname(tmp);
+	if (sb)
+		return sb;
+	return ERR_PTR(-ENODEV);
 }
 
 /*
