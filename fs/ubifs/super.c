@@ -462,6 +462,8 @@ static int ubifs_sync_fs(struct super_block *sb, int wait)
 	if (!wait)
 		return 0;
 
+	dquot_writeback_dquots(sb, -1);
+
 	/*
 	 * Synchronize write buffers, because 'ubifs_run_commit()' does not
 	 * do this if it waits for an already running commit.
