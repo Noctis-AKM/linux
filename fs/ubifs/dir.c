@@ -607,6 +607,7 @@ static int ubifs_unlink(struct inode *dir, struct dentry *dentry)
 	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 1, 0);
 	if (err)
 		goto out_cancel;
+
 	unlock_2_inodes(dir, inode);
 
 	if (budgeted)
