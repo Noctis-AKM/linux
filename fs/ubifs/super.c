@@ -2124,6 +2124,7 @@ static int ubifs_remount_fs(struct super_block *sb, int *flags, char *data)
 			ubifs_msg(c, "cannot re-mount R/W - UBI volume is R/O");
 			return -EROFS;
 		}
+		dquot_resume(sb, -1);
 		err = ubifs_remount_rw(c);
 		if (err)
 			return err;
@@ -2132,6 +2133,7 @@ static int ubifs_remount_fs(struct super_block *sb, int *flags, char *data)
 			ubifs_msg(c, "cannot re-mount R/O due to prior errors");
 			return -EROFS;
 		}
+		dquot_suspend(sb, -1);
 		ubifs_remount_ro(c);
 	}
 
