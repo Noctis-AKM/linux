@@ -2128,11 +2128,13 @@ static int ubifs_remount_fs(struct super_block *sb, int *flags, char *data)
 		err = ubifs_remount_rw(c);
 		if (err)
 			return err;
+		dquot_resume(sb, -1);
 	} else if (!c->ro_mount && (*flags & MS_RDONLY)) {
 		if (c->ro_error) {
 			ubifs_msg(c, "cannot re-mount R/O due to prior errors");
 			return -EROFS;
 		}
+		dquot_suspend(sb, -1);
 		ubifs_remount_ro(c);
 	}
 
