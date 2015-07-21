@@ -397,6 +397,8 @@ static int calc_data_growth(const struct ubifs_info *c,
 		data_growth += c->bi.page_budget;
 	if (req->new_dent)
 		data_growth += c->bi.dent_budget;
+	if (req->new_block_num)
+		data_growth += c->bi.block_budget * req->new_block_num;
 	data_growth += req->new_ino_d;
 	return data_growth;
 }
@@ -418,6 +420,8 @@ static int calc_dd_growth(const struct ubifs_info *c,
 		dd_growth += c->bi.inode_budget << (req->dirtied_ino - 1);
 	if (req->mod_dent)
 		dd_growth += c->bi.dent_budget;
+	if (req->dirtied_block_num)
+		dd_growth += c->bi.block_budget * req->dirtied_block_num;
 	dd_growth += req->dirtied_ino_d;
 	return dd_growth;
 }
