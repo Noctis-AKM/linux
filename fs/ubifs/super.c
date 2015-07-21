@@ -362,6 +362,7 @@ static void ubifs_evict_inode(struct inode *inode)
 	if (is_bad_inode(inode))
 		goto out;
 
+	dquot_initialize(inode);
 	ui->ui_size = inode->i_size = 0;
 	err = ubifs_jnl_delete_inode(c, inode);
 	if (err)
@@ -371,7 +372,7 @@ static void ubifs_evict_inode(struct inode *inode)
 		 */
 		ubifs_err(c, "can't delete inode %lu, error %d",
 			  inode->i_ino, err);
-
+	dquot_free_inode(inode);
 out:
 	if (ui->dirty)
 		ubifs_release_dirty_inode_budget(c, ui);
@@ -381,6 +382,7 @@ out:
 		smp_wmb();
 	}
 done:
+	dquot_drop(inode);
 	clear_inode(inode);
 }
 
