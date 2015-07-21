@@ -307,6 +307,7 @@ static int write_begin_slow(struct address_space *mapping,
 			 * budget we allocated.
 			 */
 			ubifs_release_dirty_inode_budget(c, ui);
+		ui->budgeted = 1;
 	}
 
 	*pagep = page;
@@ -357,6 +358,7 @@ static int allocate_budget(struct ubifs_info *c, struct page *page,
 		 * we need to budget the inode change.
 		 */
 		req.dirtied_ino = 1;
+		ui->budgeted = 1;
 	} else {
 		if (PageChecked(page))
 			/*
@@ -384,6 +386,7 @@ static int allocate_budget(struct ubifs_info *c, struct page *page,
 				 * needs a budget.
 				 */
 				req.dirtied_ino = 1;
+			ui->budgeted = 1;
 		}
 	}
 
@@ -1237,6 +1240,7 @@ static int do_setattr(struct ubifs_info *c, struct inode *inode,
 	do_attr_changes(inode, attr);
 
 	release = ui->dirty;
+	ui->budgeted = 1;
 	if (attr->ia_valid & ATTR_SIZE)
 		/*
 		 * Inode length changed, so we have to make sure
@@ -1397,6 +1401,7 @@ static int ubifs_update_time(struct inode *inode, struct timespec *time,
 		iflags |= I_DIRTY_SYNC;
 
 	release = ui->dirty;
+	ui->budgeted = 1;
 	__mark_inode_dirty(inode, iflags);
 	mutex_unlock(&ui->ui_mutex);
 	if (release)
@@ -1430,6 +1435,7 @@ static int update_mctime(struct inode *inode)
 		mutex_lock(&ui->ui_mutex);
 		inode->i_mtime = inode->i_ctime = ubifs_current_time(inode);
 		release = ui->dirty;
+		ui->budgeted = 1;
 		mark_inode_dirty_sync(inode);
 		mutex_unlock(&ui->ui_mutex);
 		if (release)
@@ -1556,6 +1562,7 @@ static int ubifs_vm_page_mkwrite(struct vm_area_struct *vma,
 		mutex_lock(&ui->ui_mutex);
 		inode->i_mtime = inode->i_ctime = ubifs_current_time(inode);
 		release = ui->dirty;
+		ui->budgeted = 1;
 		mark_inode_dirty_sync(inode);
 		mutex_unlock(&ui->ui_mutex);
 		if (release)

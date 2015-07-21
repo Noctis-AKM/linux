@@ -128,6 +128,7 @@ static int setflags(struct inode *inode, int flags)
 	ubifs_set_inode_flags(inode);
 	inode->i_ctime = ubifs_current_time(inode);
 	release = ui->dirty;
+	ui->budgeted = 1;
 	mark_inode_dirty_sync(inode);
 	mutex_unlock(&ui->ui_mutex);
 

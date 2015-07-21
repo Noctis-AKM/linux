@@ -331,6 +331,7 @@ static int ubifs_write_inode(struct inode *inode, struct writeback_control *wbc)
 	}
 
 	ui->dirty = 0;
+	ui->budgeted = 0;
 	mutex_unlock(&ui->ui_mutex);
 	ubifs_release_dirty_inode_budget(c, ui);
 	return err;
@@ -386,12 +387,23 @@ done:
 static void ubifs_dirty_inode(struct inode *inode, int flags)
 {
         struct ubifs_inode *ui = ubifs_inode(inode);
+	int need_unlock = 0;
 
-	ubifs_assert(mutex_is_locked(&ui->ui_mutex));
+	if (unlikely(!mutex_is_locked(&ui->ui_mutex))) {
+		/* We need to lock ui_mutex to access ui->budgeted */
+		mutex_lock(&ui->ui_mutex);
+		need_unlock = 1;
+	}
+
+	/* Check the budget for this inode */
+	ubifs_assert(ui->budgeted);
 	if (!ui->dirty) {
 		ui->dirty = 1;
 		dbg_gen("inode %lu",  inode->i_ino);
 	}
+
+	if (need_unlock)
+		mutex_unlock(&ui->ui_mutex);
 }
 
 static int ubifs_statfs(struct dentry *dentry, struct kstatfs *buf)
