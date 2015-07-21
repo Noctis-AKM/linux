@@ -54,7 +54,7 @@
 #include <linux/namei.h>
 #include <linux/slab.h>
 
-static int read_block(struct inode *inode, void *addr, unsigned int block,
+int read_block(struct inode *inode, void *addr, unsigned int block,
 		      struct ubifs_data_node *dn)
 {
 	struct ubifs_info *c = inode->i_sb->s_fs_info;
