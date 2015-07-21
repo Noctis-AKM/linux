@@ -52,6 +52,7 @@
 #include "ubifs.h"
 #include <linux/mount.h>
 #include <linux/slab.h>
+#include <linux/quotaops.h>
 
 /**
  * ubifs_read_block - read a block from inode
@@ -439,14 +440,26 @@ static int ubifs_write_begin(struct file *file, struct address_space *mapping,
 	struct ubifs_inode *ui = ubifs_inode(inode);
 	pgoff_t index = pos >> PAGE_CACHE_SHIFT;
 	int uninitialized_var(err), appending = !!(pos + len > inode->i_size);
+	int quota_size = 0;
 	int skipped_read = 0;
 	struct page *page;
+	int ret = 0;
 
 	ubifs_assert(ubifs_inode(inode)->ui_size == inode->i_size);
 	ubifs_assert(!c->ro_media && !c->ro_mount);
 
 	if (unlikely(c->ro_error))
 		return -EROFS;
+
+	quota_size = ((pos + len) - inode->i_size);
+	if (quota_size < 0)
+		quota_size = 0;
+	if (S_ISREG(inode->i_mode)) {
+		dquot_initialize(inode);
+		ret = dquot_alloc_space_nodirty(inode, quota_size);
+		if (unlikely(ret))
+			return ret;
+	}
 
 	/* Try out the fast-path part first */
 	page = grab_cache_page_write_begin(mapping, index, flags);
@@ -553,6 +566,7 @@ static int ubifs_write_end(struct file *file, struct address_space *mapping,
 	struct ubifs_inode *ui = ubifs_inode(inode);
 	struct ubifs_info *c = inode->i_sb->s_fs_info;
 	loff_t end_pos = pos + len;
+	int quota_size = 0;
 	int appending = !!(end_pos > inode->i_size);
 
 	dbg_gen("ino %lu, pos %llu, pg %lu, len %u, copied %d, i_size %lld",
@@ -571,6 +585,12 @@ static int ubifs_write_end(struct file *file, struct address_space *mapping,
 		dbg_gen("copied %d instead of %d, read page and repeat",
 			copied, len);
 		cancel_budget(c, page, ui, appending);
+		quota_size = ((pos + len) - inode->i_size);
+		if (quota_size < 0)
+			quota_size = 0;
+		if (S_ISREG(inode->i_mode)) {
+			dquot_free_space_nodirty(inode, quota_size);
+		}
 		ClearPageChecked(page);
 
 		/*
