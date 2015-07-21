@@ -1044,6 +1044,8 @@ struct ubifs_debug_info;
  * @bulk_read: enable bulk-reads
  * @default_compr: default compression algorithm (%UBIFS_COMPR_LZO, etc)
  * @rw_incompat: the media is not R/W compatible
+ * @usrquota: enable usrquota
+ * @grpquota: enable grpquota
  *
  * @tnc_mutex: protects the Tree Node Cache (TNC), @zroot, @cnext, @enext, and
  *             @calc_idx_sz
@@ -1285,6 +1287,8 @@ struct ubifs_info {
 	unsigned int bulk_read:1;
 	unsigned int default_compr:2;
 	unsigned int rw_incompat:1;
+	unsigned int usrquota:1;
+	unsigned int grpquota:1;
 
 	struct mutex tnc_mutex;
 	struct ubifs_zbranch zroot;
