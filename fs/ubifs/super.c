@@ -2002,6 +2002,34 @@ static void ubifs_put_super(struct super_block *sb)
 
 	ubifs_msg(c, "un-mount UBI device %d", c->vi.ubi_num);
 
+	if (!c->ro_mount) {
+		struct quota_info *dqopt = sb_dqopt(sb);
+		struct inode *inodes[MAXQUOTAS] = {};
+		struct inode *tmp = NULL;
+		struct ubifs_inode *ui = NULL;
+		struct ubifs_budget_req req = {};
+		int cnt = 0;
+		int index = 0;
+
+		for (cnt = 0; cnt < MAXQUOTAS; cnt++) {
+			if (!sb_has_quota_loaded(sb, cnt))
+				continue;
+			req.dirtied_ino += 1;
+			inodes[index++] = dqopt->files[cnt];
+		}
+		ubifs_budget_space(c, &req);
+
+		for (cnt = 0; cnt < MAXQUOTAS; cnt++) {
+			tmp = inodes[cnt];
+			if (!tmp)
+				break;
+			ui = ubifs_inode(tmp);
+			mutex_lock(&ui->ui_mutex);
+			ui->budgeted = 1;
+			mutex_unlock(&ui->ui_mutex);
+		}
+		dquot_disable(sb, -1, DQUOT_USAGE_ENABLED | DQUOT_LIMITS_ENABLED);
+	}
 	/*
 	 * The following asserts are only valid if there has not been a failure
 	 * of the media. For example, there will be dirty inodes if we failed
