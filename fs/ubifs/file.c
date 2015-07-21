@@ -53,6 +53,7 @@
 #include <linux/mount.h>
 #include <linux/namei.h>
 #include <linux/slab.h>
+#include <linux/quotaops.h>
 
 int ubifs_read_block(struct inode *inode, void *addr, unsigned int block,
 		      struct ubifs_data_node *dn)
@@ -431,8 +432,10 @@ static int ubifs_write_begin(struct file *file, struct address_space *mapping,
 	struct ubifs_inode *ui = ubifs_inode(inode);
 	pgoff_t index = pos >> PAGE_CACHE_SHIFT;
 	int uninitialized_var(err), appending = !!(pos + len > inode->i_size);
+	int quota_size = 0;
 	int skipped_read = 0;
 	struct page *page;
+	int ret = 0;
 
 	ubifs_assert(ubifs_inode(inode)->ui_size == inode->i_size);
 	ubifs_assert(!c->ro_media && !c->ro_mount);
@@ -440,10 +443,22 @@ static int ubifs_write_begin(struct file *file, struct address_space *mapping,
 	if (unlikely(c->ro_error))
 		return -EROFS;
 
+	quota_size = ((pos + len) - inode->i_size);
+	if (quota_size < 0)
+		quota_size = 0;
+	if (S_ISREG(inode->i_mode)) {
+		dquot_initialize(inode);
+		ret = dquot_alloc_space_nodirty(inode, quota_size);
+		if (unlikely(ret))
+			goto err;
+	}
+
 	/* Try out the fast-path part first */
 	page = grab_cache_page_write_begin(mapping, index, flags);
-	if (unlikely(!page))
-		return -ENOMEM;
+	if (unlikely(!page)) {
+		ret = -ENOMEM;
+		goto free_quot;
+	}
 
 	if (!PageUptodate(page)) {
 		/* The page is not loaded from the flash */
@@ -497,7 +512,9 @@ static int ubifs_write_begin(struct file *file, struct address_space *mapping,
 		unlock_page(page);
 		page_cache_release(page);
 
-		return write_begin_slow(mapping, pos, len, pagep, flags);
+		ret = write_begin_slow(mapping, pos, len, pagep, flags);
+		if (unlikely(ret))
+			goto free_quot;
 	}
 
 	/*
@@ -507,7 +524,12 @@ static int ubifs_write_begin(struct file *file, struct address_space *mapping,
 	 * otherwise. This is an optimization (slightly hacky though).
 	 */
 	*pagep = page;
-	return 0;
+
+	return ret;
+free_quot:
+	dquot_free_space_nodirty(inode, quota_size);
+err:
+	return ret;
 
 }
 
