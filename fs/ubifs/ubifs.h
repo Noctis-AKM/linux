@@ -854,6 +854,8 @@ struct ubifs_compressor {
  *               have to be re-calculated
  * @new_page: non-zero if the operation adds a new page
  * @dirtied_page: non-zero if the operation makes a page dirty
+ * @new_block: non-zero if the operation adds a new block
+ * @dirtied_block: non-zero if the operation makes a block dirty
  * @new_dent: non-zero if the operation adds a new directory entry
  * @mod_dent: non-zero if the operation removes or modifies an existing
  *            directory entry
@@ -885,6 +887,8 @@ struct ubifs_budget_req {
 #ifndef UBIFS_DEBUG
 	unsigned int new_page:1;
 	unsigned int dirtied_page:1;
+	unsigned int new_block:1;
+	unsigned int dirtied_block:1;
 	unsigned int new_dent:1;
 	unsigned int mod_dent:1;
 	unsigned int new_ino:1;
@@ -895,6 +899,8 @@ struct ubifs_budget_req {
 	/* Not bit-fields to check for overflows */
 	unsigned int new_page;
 	unsigned int dirtied_page;
+	unsigned int new_block;
+	unsigned int dirtied_block;
 	unsigned int new_dent;
 	unsigned int mod_dent;
 	unsigned int new_ino;
@@ -983,6 +989,7 @@ struct ubifs_budg_info {
 	int page_budget;
 	int inode_budget;
 	int dent_budget;
+	int block_budget;
 };
 
 struct ubifs_debug_info;
