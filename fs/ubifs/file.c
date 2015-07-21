@@ -54,7 +54,7 @@
 #include <linux/namei.h>
 #include <linux/slab.h>
 
-static int read_block(struct inode *inode, void *addr, unsigned int block,
+int ubifs_read_block(struct inode *inode, void *addr, unsigned int block,
 		      struct ubifs_data_node *dn)
 {
 	struct ubifs_info *c = inode->i_sb->s_fs_info;
@@ -141,7 +141,7 @@ static int do_readpage(struct page *page)
 			err = -ENOENT;
 			memset(addr, 0, UBIFS_BLOCK_SIZE);
 		} else {
-			ret = read_block(inode, addr, block, dn);
+			ret = ubifs_read_block(inode, addr, block, dn);
 			if (ret) {
 				err = ret;
 				if (err != -ENOENT)
