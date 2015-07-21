@@ -556,6 +556,8 @@ void ubifs_dump_budget_req(const struct ubifs_budget_req *req)
 	       req->new_page, req->dirtied_page);
 	pr_err("\tnew_dent    %d, mod_dent     %d\n",
 	       req->new_dent, req->mod_dent);
+	pr_err("\tnew_block   %d, dirtied_block %d\n",
+	       req->new_block, req->dirtied_block);
 	pr_err("\tidx_growth  %d\n", req->idx_growth);
 	pr_err("\tdata_growth %d dd_growth     %d\n",
 	       req->data_growth, req->dd_growth);

@@ -699,6 +699,7 @@ static int init_constants_sb(struct ubifs_info *c)
 	c->bi.page_budget = UBIFS_MAX_DATA_NODE_SZ * UBIFS_BLOCKS_PER_PAGE;
 	c->bi.inode_budget = UBIFS_INO_NODE_SZ;
 	c->bi.dent_budget = UBIFS_MAX_DENT_NODE_SZ;
+	c->bi.block_budget = UBIFS_MAX_DATA_NODE_SZ;
 
 	/*
 	 * When the amount of flash space used by buds becomes
