@@ -861,6 +861,8 @@ struct ubifs_compressor {
  * @new_ino_d: how much data newly created inode contains
  * @dirtied_ino: how many inodes the operation makes dirty
  * @dirtied_ino_d: how much data dirtied inode contains
+ * @new_block_num: how many new blocks
+ * @dirtied_block_num: how many dirtied blocks
  * @idx_growth: how much the index will supposedly grow
  * @data_growth: how much new data the operation will supposedly add
  * @dd_growth: how much data that makes other data dirty the operation will
@@ -902,6 +904,8 @@ struct ubifs_budget_req {
 	unsigned int dirtied_ino;
 	unsigned int dirtied_ino_d;
 #endif
+	unsigned int new_block_num;
+	unsigned int dirtied_block_num;
 	int idx_growth;
 	int data_growth;
 	int dd_growth;
@@ -983,6 +987,7 @@ struct ubifs_budg_info {
 	int page_budget;
 	int inode_budget;
 	int dent_budget;
+	int block_budget;
 };
 
 struct ubifs_debug_info;
