@@ -410,6 +410,7 @@ struct ubifs_inode {
 	unsigned int xattr_cnt;
 	unsigned int xattr_names;
 	unsigned int dirty:1;
+	unsigned int budgeted:1;
 	unsigned int xattr:1;
 	unsigned int bulk_read:1;
 	unsigned int compr_type:2;
