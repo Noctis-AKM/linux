@@ -41,6 +41,7 @@
  */
 
 #include "ubifs.h"
+#include <linux/quotaops.h>
 
 /**
  * inherit_flags - inherit flags of the parent inode.
@@ -90,6 +91,7 @@ struct inode *ubifs_new_inode(struct ubifs_info *c, const struct inode *dir,
 {
 	struct inode *inode;
 	struct ubifs_inode *ui;
+	int err = 0;
 
 	inode = new_inode(c->vfs_sb);
 	if (!inode)
@@ -108,6 +110,11 @@ struct inode *ubifs_new_inode(struct ubifs_info *c, const struct inode *dir,
 	inode->i_mtime = inode->i_atime = inode->i_ctime =
 			 ubifs_current_time(inode);
 	inode->i_mapping->nrpages = 0;
+
+	dquot_initialize(inode);
+        err = dquot_alloc_inode(inode);
+        if (err)
+                goto fail_drop;
 
 	switch (mode & S_IFMT) {
 	case S_IFREG:
@@ -148,8 +155,8 @@ struct inode *ubifs_new_inode(struct ubifs_info *c, const struct inode *dir,
 			spin_unlock(&c->cnt_lock);
 			ubifs_err(c, "out of inode numbers");
 			make_bad_inode(inode);
-			iput(inode);
-			return ERR_PTR(-EINVAL);
+			err = -EINVAL;
+			goto fail_free;
 		}
 		ubifs_warn(c, "running out of inode numbers (current %lu, max %u)",
 			   (unsigned long)c->highest_inum, INUM_WATERMARK);
@@ -166,6 +173,13 @@ struct inode *ubifs_new_inode(struct ubifs_info *c, const struct inode *dir,
 	ui->creat_sqnum = ++c->max_sqnum;
 	spin_unlock(&c->cnt_lock);
 	return inode;
+
+fail_free:
+	dquot_free_inode(inode);
+fail_drop:
+	dquot_drop(inode);
+	iput(inode);
+	return ERR_PTR(err);
 }
 
 static int dbg_check_name(const struct ubifs_info *c,
