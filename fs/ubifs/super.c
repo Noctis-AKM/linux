@@ -36,6 +36,7 @@
 #include <linux/mount.h>
 #include <linux/math64.h>
 #include <linux/writeback.h>
+#include <linux/quotaops.h>
 #include <linux/cdev.h>
 #include <linux/quotaops.h>
 #include "ubifs.h"
@@ -442,6 +443,12 @@ static int ubifs_show_options(struct seq_file *s, struct dentry *root)
 		seq_puts(s, ",chk_data_crc");
 	else if (c->mount_opts.chk_data_crc == 1)
 		seq_puts(s, ",no_chk_data_crc");
+
+	if (c->usrquota)
+		seq_puts(s, ",usrquota");
+
+	if (c->grpquota)
+		seq_puts(s, ",grpquota");
 
 	if (c->mount_opts.override_compr) {
 		seq_printf(s, ",compr=%s",
@@ -1112,6 +1119,10 @@ enum {
 	Opt_chk_data_crc,
 	Opt_no_chk_data_crc,
 	Opt_override_compr,
+	Opt_ignore,
+	Opt_quota,
+	Opt_usrquota,
+	Opt_grpquota,
 	Opt_err,
 };
 
@@ -1123,6 +1134,10 @@ static const match_table_t tokens = {
 	{Opt_chk_data_crc, "chk_data_crc"},
 	{Opt_no_chk_data_crc, "no_chk_data_crc"},
 	{Opt_override_compr, "compr=%s"},
+	{Opt_ignore, "noquota"},
+	{Opt_quota, "quota"},
+	{Opt_usrquota, "usrquota"},
+	{Opt_grpquota, "grpquota"},
 	{Opt_err, NULL},
 };
 
@@ -1223,6 +1238,21 @@ static int ubifs_parse_options(struct ubifs_info *c, char *options,
 			c->default_compr = c->mount_opts.compr_type;
 			break;
 		}
+#ifdef CONFIG_QUOTA
+		case Opt_quota:
+		case Opt_usrquota:
+			c->usrquota = 1;
+			break;
+		case Opt_grpquota:
+			c->grpquota = 1;
+			break;
+#else
+		case Opt_quota:
+		case Opt_usrquota:
+		case Opt_grpquota:
+			ubifs_err(c, "quota operations not supported");
+			break;
+#endif
 		default:
 		{
 			unsigned long flag;
