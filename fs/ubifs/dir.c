@@ -574,6 +574,7 @@ static int ubifs_unlink(struct inode *dir, struct dentry *dentry)
 	int err, budgeted = 1;
 	struct ubifs_budget_req req = { .mod_dent = 1, .dirtied_ino = 2 };
 	unsigned int saved_nlink = inode->i_nlink;
+	loff_t quota_size = inode->i_size;
 
 	/*
 	 * Budget request settings: deletion direntry, deletion inode (+1 for
@@ -607,7 +608,10 @@ static int ubifs_unlink(struct inode *dir, struct dentry *dentry)
 	err = ubifs_jnl_update(c, dir, &dentry->d_name, inode, 1, 0);
 	if (err)
 		goto out_cancel;
+
 	unlock_2_inodes(dir, inode);
+
+	dquot_free_space_nodirty(inode, quota_size);
 
 	if (budgeted)
 		ubifs_release_budget(c, &req);
