@@ -36,6 +36,7 @@
 #include <linux/mount.h>
 #include <linux/math64.h>
 #include <linux/writeback.h>
+#include <linux/cdev.h>
 #include "ubifs.h"
 
 /*
@@ -2034,6 +2035,7 @@ static int ubifs_fill_super(struct super_block *sb, void *data, int silent)
 
 	sb->s_bdi = &c->bdi;
 	sb->s_cdev = ubi_get_volume_cdev(c->ubi);
+	sb->s_dev = sb->s_cdev->dev;
 	sb->s_fs_info = c;
 	sb->s_magic = UBIFS_SUPER_MAGIC;
 	sb->s_blocksize = UBIFS_BLOCK_SIZE;
