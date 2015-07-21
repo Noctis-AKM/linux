@@ -2277,6 +2277,62 @@ static struct ubifs_info *alloc_ubifs_info(struct ubi_volume_desc *ubi)
 	return c;
 }
 
+#ifdef CONFIG_QUOTA
+static int ubifs_quota_off(struct super_block *sb, int type)
+{
+	struct ubifs_budget_req req = {};
+	struct ubifs_info *c = sb->s_fs_info;
+	struct quota_info *dqopt = sb_dqopt(sb);
+	struct inode *inodes[MAXQUOTAS] = {};
+	struct inode *tmp = NULL;
+	struct ubifs_inode *ui = NULL;
+	int ret = 0;
+	int cnt = 0;
+
+	if (type == -1) {
+		for (cnt = 0; cnt < MAXQUOTAS; cnt++) {
+			if (!sb_has_quota_loaded(sb, cnt))
+				continue;
+			req.dirtied_ino += 1;
+			inodes[cnt] = dqopt->files[cnt];
+		}
+	} else {
+		if (sb_has_quota_loaded(sb, type)) {
+			req.dirtied_ino = 1;
+			inodes[cnt] = dqopt->files[type];
+		}
+	}
+
+	if (req.dirtied_ino) {
+		ret = ubifs_budget_space(c, &req);
+		if (ret)
+			return ret;
+	}
+
+	for (cnt = 0; cnt < MAXQUOTAS; cnt++) {
+		tmp = inodes[cnt];
+		if (!tmp)
+			break;
+		ui = ubifs_inode(tmp);
+		mutex_lock(&ui->ui_mutex);
+		ui->budgeted = 1;
+		mutex_unlock(&ui->ui_mutex);
+	}
+
+	return dquot_disable(sb, type, DQUOT_USAGE_ENABLED | DQUOT_LIMITS_ENABLED);
+}
+
+static const struct quotactl_ops ubifs_qctl_operations = {
+	.quota_on	= dquot_quota_on,
+	.quota_off	= ubifs_quota_off,
+	.quota_sync     = dquot_quota_sync,
+	.get_state      = dquot_get_state,
+	.set_info       = dquot_set_dqinfo,
+	.get_dqblk      = dquot_get_dqblk,
+	.set_dqblk      = dquot_set_dqblk
+};
+#endif
+
 static int ubifs_fill_super(struct super_block *sb, void *data, int silent)
 {
 	struct ubifs_info *c = sb->s_fs_info;
