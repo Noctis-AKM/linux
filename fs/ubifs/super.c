@@ -37,6 +37,7 @@
 #include <linux/math64.h>
 #include <linux/writeback.h>
 #include <linux/cdev.h>
+#include <linux/quotaops.h>
 #include "ubifs.h"
 
 /*
@@ -910,6 +911,158 @@ static int check_volume_empty(struct ubifs_info *c)
 
 	return 0;
 }
+
+#ifdef CONFIG_QUOTA
+static ssize_t ubifs_quota_read(struct super_block *sb, int type, char *data,
+			       size_t len, loff_t off)
+{
+	struct inode *inode = sb_dqopt(sb)->files[type];
+	unsigned long block = off >> UBIFS_BLOCK_SHIFT;
+	int offset = off & (sb->s_blocksize - 1);
+	int tocopy = 0;
+	size_t toread;
+	char *block_buf;
+	struct ubifs_data_node *dn;
+	int ret, err = 0;
+	loff_t i_size = i_size_read(inode);
+
+	if (off > i_size)
+		return 0;
+	if (off + len > i_size)
+		len = i_size - off;
+	toread = len;
+
+	dn = kmalloc(UBIFS_MAX_DATA_NODE_SZ, GFP_NOFS);
+	if (!dn) {
+		err = -ENOMEM;
+		goto out;
+	}
+
+	block_buf = kmalloc(sb->s_blocksize, GFP_NOFS);
+	if (!block_buf) {
+		err = -ENOMEM;
+		goto free_dn;
+	}
+
+	while (toread > 0) {
+		tocopy = sb->s_blocksize - offset < toread ?
+				sb->s_blocksize - offset : toread;
+
+		ret = ubifs_read_block(inode, block_buf, block, dn);
+		if (ret) {
+			if (ret != -ENOENT) {
+				err = ret;
+				goto free_buf;
+			}
+			memset(block_buf, 0, sb->s_blocksize);
+		}
+		memcpy(data, block_buf + offset, tocopy);
+		offset = 0;
+		block++;;
+		toread -= tocopy;
+		data += tocopy;
+	}
+free_buf:
+	kfree(block_buf);
+free_dn:
+	kfree(dn);
+out:
+	if (!err)
+		return len;
+	return err;
+}
+
+static ssize_t ubifs_quota_write(struct super_block *sb, int type,
+				const char *data, size_t len, loff_t off)
+{
+	struct inode *inode = sb_dqopt(sb)->files[type];
+	unsigned long block = off >> UBIFS_BLOCK_SHIFT;
+	struct ubifs_info *c = inode->i_sb->s_fs_info;
+	int offset = off & (sb->s_blocksize - 1);
+	union ubifs_key key;
+	int tocopy = 0;
+	size_t towrite = len;
+	int ret, err = 0;
+	struct ubifs_budget_req req = {};
+	struct ubifs_data_node *dn;
+	char *block_buf;
+
+	/*
+	 * Since we budget at most two blocks (one for dirtied block and
+	 * one for new block) here, then error out if the length out of
+	 * what allowed. NOTE, the writing length from quota should never
+	 * be larger than what we allowed here. Ext3 and Ext4 are also
+	 * limiting more strict for the len to one block size.
+	 */
+	if (sb->s_blocksize + (sb->s_blocksize - offset) < len) {
+		ubifs_err(c, "Quota write (off=%llu, len=%llu)"
+			" cancelled because length is too large",
+			(unsigned long long)off, (unsigned long long)len);
+		return -EIO;
+	}
+
+	if ((offset + len) > sb->s_blocksize)
+		req.new_block = 1;
+	if (offset)
+		req.dirtied_block = 1;
+
+	err = ubifs_budget_space(c, &req);
+	if (err)
+		goto out;
+
+	dn = kmalloc(UBIFS_MAX_DATA_NODE_SZ, GFP_NOFS);
+	if (!dn) {
+		err = -ENOMEM;
+		goto release_budget;
+	}
+
+	block_buf = kmalloc(sb->s_blocksize, GFP_NOFS);
+	if (!block_buf) {
+		err = -ENOMEM;
+		goto free_dn;
+	}
+
+	while (towrite > 0) {
+		tocopy = sb->s_blocksize - offset < towrite ?
+				sb->s_blocksize - offset : towrite;
+
+		if (offset || tocopy != sb->s_blocksize) {
+			ret = ubifs_read_block(inode, block_buf, block, dn);
+			if (ret) {
+				if (ret != -ENOENT) {
+					err = ret;
+					goto free_buf;
+				}
+				memset(block_buf, 0, sb->s_blocksize);
+			}
+		}
+		memcpy(block_buf + offset, data, tocopy);
+		data_key_init(c, &key, inode->i_ino, block);
+		err = ubifs_jnl_write_data(c, inode, &key, block_buf, sb->s_blocksize);
+		if (err)
+			goto free_buf;
+		offset = 0;
+		block++;;
+		towrite -= tocopy;
+		data += tocopy;
+	}
+free_buf:
+	kfree(block_buf);
+free_dn:
+	kfree(dn);
+release_budget:
+	ubifs_release_budget(c, &req);
+out:
+	if (!err)
+		return len;
+	return err;
+}
+
+static struct dquot **ubifs_get_dquots(struct inode *inode)
+{
+	return ubifs_inode(inode)->i_dquot;
+}
+#endif
 
 /*
  * UBIFS mount options.
@@ -1887,6 +2040,11 @@ const struct super_operations ubifs_super_operations = {
 	.remount_fs    = ubifs_remount_fs,
 	.show_options  = ubifs_show_options,
 	.sync_fs       = ubifs_sync_fs,
+#ifdef CONFIG_QUOTA
+	.quota_read    = ubifs_quota_read,
+	.quota_write   = ubifs_quota_write,
+	.get_dquots    = ubifs_get_dquots,
+#endif
 };
 
 /**
