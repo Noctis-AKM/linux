@@ -383,15 +383,38 @@ done:
 	clear_inode(inode);
 }
 
+/*
+ * In theory, ubifs should take the full control of dirty<->clean
+ * of an inode with ui->ui_mutex. But there are callers of
+ * ubifs_dirty_inode in vfs without holding ui->ui_mutex and
+ * budgeting. So when we found the ui_mutex is not locked, we have
+ * to lock ui->ui_mutex by itself and do a budget by itself.
+ */
 static void ubifs_dirty_inode(struct inode *inode, int flags)
 {
         struct ubifs_inode *ui = ubifs_inode(inode);
+	int locked = mutex_is_locked(&ui->ui_mutex);
+	struct ubifs_info *c = inode->i_sb->s_fs_info;
+	int ret = 0;
 
-	ubifs_assert(mutex_is_locked(&ui->ui_mutex));
+	if (!locked)
+		mutex_lock(&ui->ui_mutex);
+
 	if (!ui->dirty) {
+		if (!locked) {
+			struct ubifs_budget_req req = { .dirtied_ino = 1,
+				   .dirtied_ino_d = ALIGN(ui->data_len, 8) };
+			ret = ubifs_budget_space(c, &req);
+			if (ret)
+				goto out;
+		}
 		ui->dirty = 1;
 		dbg_gen("inode %lu",  inode->i_ino);
 	}
+out:
+	if (!locked)
+		mutex_unlock(&ui->ui_mutex);
+	return;
 }
 
 static int ubifs_statfs(struct dentry *dentry, struct kstatfs *buf)
