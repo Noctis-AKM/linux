@@ -1751,6 +1751,8 @@ const struct ubifs_lprops *ubifs_fast_find_frdi_idx(struct ubifs_info *c);
 int ubifs_calc_dark(const struct ubifs_info *c, int spc);
 
 /* file.c */
+int ubifs_read_block(struct inode *inode, void *addr, unsigned int block,
+		      struct ubifs_data_node *dn);
 int ubifs_fsync(struct file *file, loff_t start, loff_t end, int datasync);
 int ubifs_setattr(struct dentry *dentry, struct iattr *attr);
 int ubifs_update_time(struct inode *inode, struct timespec *time, int flags);
