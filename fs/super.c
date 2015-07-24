@@ -559,19 +559,20 @@ void iterate_supers_type(struct file_system_type *type,
 }
 EXPORT_SYMBOL(iterate_supers_type);
 
-/**
- * get_super - get the superblock of a device
- * @bdev: device to get the superblock for
- * 
- * Scans the superblock list and finds the superblock of the file system
- * mounted on the device given. %NULL is returned if no match is found.
+/*
+ * __get_super - helper function for the other functions in get_super class
+ * @compare: function pointer to compare sb in list and key
+ * @key: key of the sb you want
+ *
+ * Scans the superblock list and finds the superblock you want. %NULL is
+ * returned if no match is found.
  */
-
-struct super_block *get_super(struct block_device *bdev)
+static struct super_block *__get_super(
+		int (*compare)(struct super_block *, void *), void *key)
 {
 	struct super_block *sb;
 
-	if (!bdev)
+	if (!key)
 		return NULL;
 
 	spin_lock(&sb_lock);
@@ -579,7 +580,7 @@ rescan:
 	list_for_each_entry(sb, &super_blocks, s_list) {
 		if (hlist_unhashed(&sb->s_instances))
 			continue;
-		if (sb->s_bdev == bdev) {
+		if (compare(sb, key)) {
 			sb->s_count++;
 			spin_unlock(&sb_lock);
 			down_read(&sb->s_umount);
@@ -595,6 +596,20 @@ rescan:
 	}
 	spin_unlock(&sb_lock);
 	return NULL;
+}
+
+static int bdev_compare(struct super_block *sb, void *key)
+{
+	return (sb->s_bdev == (struct block_device *)key);
+}
+
+/**
+ * get_super - get the superblock of a device
+ * @bdev: device to get the superblock for
+ */
+struct super_block *get_super(struct block_device *bdev)
+{
+	return __get_super(bdev_compare, bdev);
 }
 EXPORT_SYMBOL(get_super);
 
@@ -651,32 +666,15 @@ restart:
 	spin_unlock(&sb_lock);
 	return NULL;
 }
+
+static int user_compare(struct super_block *sb, void *key)
+{
+	return (sb->s_dev == *(dev_t *)key);
+}
  
 struct super_block *user_get_super(dev_t dev)
 {
-	struct super_block *sb;
-
-	spin_lock(&sb_lock);
-rescan:
-	list_for_each_entry(sb, &super_blocks, s_list) {
-		if (hlist_unhashed(&sb->s_instances))
-			continue;
-		if (sb->s_dev ==  dev) {
-			sb->s_count++;
-			spin_unlock(&sb_lock);
-			down_read(&sb->s_umount);
-			/* still alive? */
-			if (sb->s_root && (sb->s_flags & MS_BORN))
-				return sb;
-			up_read(&sb->s_umount);
-			/* nope, got unmounted */
-			spin_lock(&sb_lock);
-			__put_super(sb);
-			goto rescan;
-		}
-	}
-	spin_unlock(&sb_lock);
-	return NULL;
+	return __get_super(user_compare, &dev);
 }
 
 /**
