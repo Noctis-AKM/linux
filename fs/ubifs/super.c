@@ -2302,6 +2302,11 @@ static int ubifs_fill_super(struct super_block *sb, void *data, int silent)
 	sb->s_op = &ubifs_super_operations;
 	sb->s_xattr = ubifs_xattr_handlers;
 
+#ifdef CONFIG_QUOTA
+	sb->dq_op = &dquot_operations;
+	sb->s_qcop = &ubifs_quotactl_ops;
+	sb->s_quota_types = QTYPE_MASK_USR | QTYPE_MASK_GRP;
+#endif
 	mutex_lock(&c->umount_mutex);
 	err = mount_ubifs(c);
 	if (err) {
