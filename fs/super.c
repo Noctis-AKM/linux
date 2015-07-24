@@ -629,18 +629,20 @@ struct super_block *get_super_cdev(struct cdev *cdev)
 EXPORT_SYMBOL(get_super_cdev);
 
 /**
- * get_super_thawed - get thawed superblock of a device
- * @bdev: device to get the superblock for
+ * __get_super_thawed - get thawed superblock
+ * @func: function pointer to get superblock by key
+ * @key: key to find superblock
  *
  * Scans the superblock list and finds the superblock of the file system
  * mounted on the device. The superblock is returned once it is thawed
  * (or immediately if it was not frozen). %NULL is returned if no match
  * is found.
  */
-struct super_block *get_super_thawed(struct block_device *bdev)
+static struct super_block *__get_super_thawed(
+		int (*compare)(struct super_block *, void *), void *key)
 {
 	while (1) {
-		struct super_block *s = get_super(bdev);
+		struct super_block *s = __get_super(compare, key);
 		if (!s || s->s_writers.frozen == SB_UNFROZEN)
 			return s;
 		up_read(&s->s_umount);
@@ -649,7 +651,26 @@ struct super_block *get_super_thawed(struct block_device *bdev)
 		put_super(s);
 	}
 }
+
+/**
+ * get_super_thawed - get thawed superblock of a device
+ * @bdev: device to get the superblock for
+ */
+struct super_block *get_super_thawed(struct block_device *bdev)
+{
+	return __get_super_thawed(bdev_compare, bdev);
+}
 EXPORT_SYMBOL(get_super_thawed);
+
+/**
+ * get_super_cdev_thawed - get thawed superblock of a char device
+ * @cdev: device to get the superblock for
+ */
+struct super_block *get_super_cdev_thawed(struct cdev *cdev)
+{
+	return __get_super_thawed(cdev_compare, cdev);
+}
+EXPORT_SYMBOL(get_super_cdev_thawed);
 
 /**
  * get_active_super - get an active reference to the superblock of a device
