@@ -314,7 +314,6 @@ void deactivate_locked_super(struct super_block *s)
 		up_write(&s->s_umount);
 	}
 }
-
 EXPORT_SYMBOL(deactivate_locked_super);
 
 /**
@@ -332,7 +331,6 @@ void deactivate_super(struct super_block *s)
 		deactivate_locked_super(s);
 	}
 }
-
 EXPORT_SYMBOL(deactivate_super);
 
 /**
@@ -438,7 +436,6 @@ void generic_shutdown_super(struct super_block *sb)
 	spin_unlock(&sb_lock);
 	up_write(&sb->s_umount);
 }
-
 EXPORT_SYMBOL(generic_shutdown_super);
 
 /**
@@ -499,7 +496,6 @@ retry:
 	register_shrinker(&s->s_shrink);
 	return s;
 }
-
 EXPORT_SYMBOL(sget);
 
 void drop_super(struct super_block *sb)
@@ -507,7 +503,6 @@ void drop_super(struct super_block *sb)
 	up_read(&sb->s_umount);
 	put_super(sb);
 }
-
 EXPORT_SYMBOL(drop_super);
 
 /**
@@ -577,7 +572,6 @@ void iterate_supers_type(struct file_system_type *type,
 		__put_super(p);
 	spin_unlock(&sb_lock);
 }
-
 EXPORT_SYMBOL(iterate_supers_type);
 
 /**
@@ -617,7 +611,6 @@ rescan:
 	spin_unlock(&sb_lock);
 	return NULL;
 }
-
 EXPORT_SYMBOL(get_super);
 
 /**
@@ -885,7 +878,6 @@ int set_anon_super(struct super_block *s, void *data)
 {
 	return get_anon_bdev(&s->s_dev);
 }
-
 EXPORT_SYMBOL(set_anon_super);
 
 void kill_anon_super(struct super_block *sb)
@@ -894,7 +886,6 @@ void kill_anon_super(struct super_block *sb)
 	generic_shutdown_super(sb);
 	free_anon_bdev(dev);
 }
-
 EXPORT_SYMBOL(kill_anon_super);
 
 void kill_litter_super(struct super_block *sb)
@@ -903,7 +894,6 @@ void kill_litter_super(struct super_block *sb)
 		d_genocide(sb->s_root);
 	kill_anon_super(sb);
 }
-
 EXPORT_SYMBOL(kill_litter_super);
 
 static int ns_test_super(struct super_block *sb, void *data)
@@ -939,7 +929,6 @@ struct dentry *mount_ns(struct file_system_type *fs_type, int flags,
 
 	return dget(sb->s_root);
 }
-
 EXPORT_SYMBOL(mount_ns);
 
 #ifdef CONFIG_BLOCK
@@ -1049,7 +1038,6 @@ void kill_block_super(struct super_block *sb)
 	WARN_ON_ONCE(!(mode & FMODE_EXCL));
 	blkdev_put(bdev, mode | FMODE_EXCL);
 }
-
 EXPORT_SYMBOL(kill_block_super);
 #endif
 
