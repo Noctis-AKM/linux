@@ -613,6 +613,21 @@ struct super_block *get_super(struct block_device *bdev)
 }
 EXPORT_SYMBOL(get_super);
 
+static int cdev_compare(struct super_block *sb, void *key)
+{
+	return (sb->s_cdev == (struct cdev *)key);
+}
+
+/**
+ * get_super_cdev - get the superblock of a cdev
+ * @cdev: char device to get the superblock for
+ */
+struct super_block *get_super_cdev(struct cdev *cdev)
+{
+	return __get_super(cdev_compare, cdev);
+}
+EXPORT_SYMBOL(get_super_cdev);
+
 /**
  * get_super_thawed - get thawed superblock of a device
  * @bdev: device to get the superblock for
