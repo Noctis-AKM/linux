@@ -2346,6 +2346,8 @@ extern void __unregister_chrdev(unsigned int major, unsigned int baseminor,
 				unsigned int count, const char *name);
 extern void unregister_chrdev_region(dev_t, unsigned);
 extern void chrdev_show(struct seq_file *,off_t);
+extern struct cdev *lookup_cdev(const char *);
+
 
 static inline int register_chrdev(unsigned int major, const char *name,
 				  const struct file_operations *fops)
