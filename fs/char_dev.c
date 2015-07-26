@@ -439,6 +439,41 @@ static int exact_lock(dev_t dev, void *data)
 	return cdev_get(p) ? 0 : -1;
 }
 
+struct cdev *cd_acquire(struct inode *inode)
+{
+	struct cdev *cdev;
+	struct cdev *new = NULL;
+
+	spin_lock(&cdev_lock);
+	cdev = inode->i_cdev;
+	if (!cdev) {
+		struct kobject *kobj;
+		int idx;
+		spin_unlock(&cdev_lock);
+		kobj = kobj_lookup(cdev_map, inode->i_rdev, &idx);
+		if (!kobj) {
+			cdev = NULL;
+			goto out;
+		}
+		new = container_of(kobj, struct cdev, kobj);
+		spin_lock(&cdev_lock);
+		/* Check i_cdev again in case somebody beat us to it while
+		   we dropped the lock. */
+		cdev = inode->i_cdev;
+		if (!cdev) {
+			inode->i_cdev = cdev = new;
+			list_add(&inode->i_devices, &cdev->list);
+		}
+	}
+
+	if (!cdev_get(cdev))
+		cdev = NULL;
+	spin_unlock(&cdev_lock);
+
+out:
+	return cdev;
+}
+
 /**
  * cdev_add() - add a char device to the system
  * @p: the cdev structure for the device
