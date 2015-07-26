@@ -474,6 +474,18 @@ out:
 	return cdev;
 }
 
+struct cdev *lookup_cdev(const char *pathname)
+{
+	struct cdev *cdev;
+	int error;
+
+	error = __lookup_dev(pathname, &cdev, NULL);
+	if (error)
+		return ERR_PTR(error);
+
+	return cdev;
+}
+
 /**
  * cdev_add() - add a char device to the system
  * @p: the cdev structure for the device
@@ -596,6 +608,7 @@ void __init chrdev_init(void)
 EXPORT_SYMBOL(register_chrdev_region);
 EXPORT_SYMBOL(unregister_chrdev_region);
 EXPORT_SYMBOL(alloc_chrdev_region);
+EXPORT_SYMBOL(lookup_cdev);
 EXPORT_SYMBOL(cdev_init);
 EXPORT_SYMBOL(cdev_alloc);
 EXPORT_SYMBOL(cdev_del);
