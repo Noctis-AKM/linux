@@ -545,6 +545,29 @@ static int ioctl_fsthaw(struct file *filp)
 	return thaw_super(sb);
 }
 
+static int ioctl_fioqsize(struct file *filp, int __user *argp)
+{
+	struct inode *inode = file_inode(filp);
+	loff_t res = 0;
+	int error = 0;
+
+	if (inode->i_op->get_qsize) {
+		res = inode->i_op->get_qsize(inode);
+		error = copy_to_user(argp, &res, sizeof(res)) ?
+				-EFAULT : 0;
+	} else {
+                if (S_ISDIR(inode->i_mode) || S_ISREG(inode->i_mode) ||
+                    S_ISLNK(inode->i_mode)) {
+                        res = inode_get_bytes(inode);
+                        error = copy_to_user(argp, &res, sizeof(res)) ?
+                                        -EFAULT : 0;
+                } else {
+                        error = -ENOTTY;
+		}
+	}
+	return error;
+}
+
 /*
  * When you add any new common ioctls to the switches above and below
  * please update compat_sys_ioctl() too.
@@ -577,13 +600,7 @@ int do_vfs_ioctl(struct file *filp, unsigned int fd, unsigned int cmd,
 		break;
 
 	case FIOQSIZE:
-		if (S_ISDIR(inode->i_mode) || S_ISREG(inode->i_mode) ||
-		    S_ISLNK(inode->i_mode)) {
-			loff_t res = inode_get_bytes(inode);
-			error = copy_to_user(argp, &res, sizeof(res)) ?
-					-EFAULT : 0;
-		} else
-			error = -ENOTTY;
+		error = ioctl_fioqsize(filp, argp);
 		break;
 
 	case FIFREEZE:
