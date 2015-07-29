@@ -58,6 +58,8 @@
  * all the nodes.
  */
 
+#include <linux/quotaops.h>
+
 #include "ubifs.h"
 
 /**
@@ -614,6 +616,8 @@ int ubifs_jnl_update(struct ubifs_info *c, const struct inode *dir,
 			goto out_finish;
 		}
 		ui->del_cmtno = c->cmt_no;
+		if (S_ISREG(inode->i_mode))
+			dquot_free_space_nodirty((struct inode *)inode, inode->i_size);
 	}
 
 	err = write_head(c, BASEHD, dent, len, &lnum, &dent_offs, sync);
