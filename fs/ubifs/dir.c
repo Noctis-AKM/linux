@@ -1205,6 +1205,9 @@ const struct inode_operations ubifs_dir_inode_operations = {
 #ifdef CONFIG_UBIFS_ATIME_SUPPORT
 	.update_time = ubifs_update_time,
 #endif
+#ifdef CONFIG_QUOTA
+	.get_qsize	= ubifs_get_qsize,
+#endif
 };
 
 const struct file_operations ubifs_dir_operations = {

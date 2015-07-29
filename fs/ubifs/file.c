@@ -1636,6 +1636,22 @@ static int ubifs_file_mmap(struct file *file, struct vm_area_struct *vma)
 	return 0;
 }
 
+/*
+ * ubifs_get_qsize: get the quota size of a file
+ * @inode: inode which we are going to get the qsize
+ *
+ * We only care the size of regular file in ubifs
+ * for quota. The reason is similar with the comment
+ * in ubifs_getattr().
+ */
+ssize_t ubifs_get_qsize(struct inode *inode)
+{
+	if (S_ISREG(inode->i_mode))
+		return i_size_read(inode);
+	else
+		return 0;
+}
+
 const struct address_space_operations ubifs_file_address_operations = {
 	.readpage       = ubifs_readpage,
 	.writepage      = ubifs_writepage,
@@ -1656,6 +1672,9 @@ const struct inode_operations ubifs_file_inode_operations = {
 #ifdef CONFIG_UBIFS_ATIME_SUPPORT
 	.update_time = ubifs_update_time,
 #endif
+#ifdef CONFIG_QUOTA
+	.get_qsize	= ubifs_get_qsize,
+#endif
 };
 
 const struct inode_operations ubifs_symlink_inode_operations = {
@@ -1669,6 +1688,9 @@ const struct inode_operations ubifs_symlink_inode_operations = {
 	.removexattr = ubifs_removexattr,
 #ifdef CONFIG_UBIFS_ATIME_SUPPORT
 	.update_time = ubifs_update_time,
+#endif
+#ifdef CONFIG_QUOTA
+	.get_qsize	= ubifs_get_qsize,
 #endif
 };
 
