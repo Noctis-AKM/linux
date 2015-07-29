@@ -1214,6 +1214,9 @@ const struct file_operations ubifs_dir_operations = {
 	.iterate        = ubifs_readdir,
 	.fsync          = ubifs_fsync,
 	.unlocked_ioctl = ubifs_ioctl,
+#ifdef CONFIG_QUOTA
+	.get_qsize	= ubifs_get_qsize,
+#endif
 #ifdef CONFIG_COMPAT
 	.compat_ioctl   = ubifs_compat_ioctl,
 #endif
