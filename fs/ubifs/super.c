@@ -1840,6 +1840,7 @@ static int ubifs_remount_rw(struct ubifs_info *c)
 		 */
 		err = dbg_check_space_info(c);
 	}
+	c->vfs_sb->s_flags &= ~MS_RDONLY;
 
 	mutex_unlock(&c->umount_mutex);
 	return err;
@@ -1906,6 +1907,7 @@ static void ubifs_remount_ro(struct ubifs_info *c)
 	err = dbg_check_space_info(c);
 	if (err)
 		ubifs_ro_mode(c, err);
+	c->vfs_sb->s_flags |= MS_RDONLY;
 	mutex_unlock(&c->umount_mutex);
 }
 
