@@ -668,8 +668,7 @@ int dquot_quota_sync(struct super_block *sb, int type)
 	/* This is not very clever (and fast) but currently I don't know about
 	 * any other simple way of getting quota data to disk and we must get
 	 * them there for userspace to be visible... */
-	if (sb->s_op->sync_fs)
-		sb->s_op->sync_fs(sb, 1);
+	sync_filesystem(sb);
 	sync_blockdev(sb->s_bdev);
 
 	/*
@@ -2043,7 +2042,7 @@ int dquot_disable(struct super_block *sb, int type, unsigned int flags)
 	/*
 	 * Skip everything if there's nothing to do. We have to do this because
 	 * sometimes we are called when fill_super() failed and calling
-	 * sync_fs() in such cases does no good.
+	 * sync_filesystem() in such cases does no good.
 	 */
 	if (!sb_any_quota_loaded(sb)) {
 		mutex_unlock(&dqopt->dqonoff_mutex);
@@ -2110,8 +2109,7 @@ int dquot_disable(struct super_block *sb, int type, unsigned int flags)
 
 	/* Sync the superblock so that buffers with quota data are written to
 	 * disk (and so userspace sees correct data afterwards). */
-	if (sb->s_op->sync_fs)
-		sb->s_op->sync_fs(sb, 1);
+	sync_filesystem(sb);
 	sync_blockdev(sb->s_bdev);
 	/* Now the quota files are just ordinary files and we can set the
 	 * inode flags back. Moreover we discard the pagecache so that
