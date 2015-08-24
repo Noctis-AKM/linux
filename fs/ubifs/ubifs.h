@@ -418,6 +418,9 @@ struct ubifs_inode {
 	loff_t synced_i_size;
 	loff_t ui_size;
 	int flags;
+#ifdef CONFIG_QUOTA
+	struct dquot *i_dquot[MAXQUOTAS];
+#endif
 	pgoff_t last_page_read;
 	pgoff_t read_in_a_row;
 	int data_len;
