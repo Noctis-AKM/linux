@@ -2125,6 +2125,7 @@ int dquot_disable(struct super_block *sb, int type, unsigned int flags)
 				mutex_lock(&toputinode[cnt]->i_mutex);
 				toputinode[cnt]->i_flags &= ~(S_IMMUTABLE |
 				  S_NOATIME | S_NOQUOTA);
+				toputinode[cnt]->i_flags |= dqopt->old_flags[cnt];
 				truncate_inode_pages(&toputinode[cnt]->i_data,
 						     0);
 				mutex_unlock(&toputinode[cnt]->i_mutex);
@@ -2223,6 +2224,7 @@ static int vfs_load_quota_inode(struct inode *inode, int type, int format_id,
 		oldflags = inode->i_flags & (S_NOATIME | S_IMMUTABLE |
 					     S_NOQUOTA);
 		inode->i_flags |= S_NOQUOTA | S_NOATIME | S_IMMUTABLE;
+		dqopt->old_flags[type] = oldflags;
 		mutex_unlock(&inode->i_mutex);
 		/*
 		 * When S_NOQUOTA is set, remove dquot references as no more
