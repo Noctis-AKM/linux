@@ -2192,6 +2192,67 @@ static struct ubifs_info *alloc_ubifs_info(struct ubi_volume_desc *ubi)
 	return c;
 }
 
+#ifdef CONFIG_QUOTA
+static int ubifs_restore_iflags(struct super_block *sb, struct inode **toputinode,
+					unsigned int *old_flags)
+{
+	int cnt = 0;
+	int err = 0;
+	struct quota_info *dqopt = sb_dqopt(sb);
+	struct ubifs_info *c = sb->s_fs_info;
+
+	for (cnt = 0; cnt < MAXQUOTAS; cnt++)
+		if (toputinode[cnt]) {
+			struct ubifs_inode *ui = ubifs_inode(toputinode[cnt]);
+			struct ubifs_budget_req req = { .dirtied_ino = 1,
+					.dirtied_ino_d = ALIGN(ui->data_len, 8) };
+			int release = 0;
+
+			/* budget for the inode which need to update */
+			err = ubifs_budget_space(c, &req);
+			if (err)
+				return err;
+
+			mutex_lock(&dqopt->dqonoff_mutex);
+			/* If quota was reenabled in the meantime, we have
+			 * nothing to do */
+			if (!sb_has_quota_loaded(sb, cnt)) {
+				mutex_lock(&toputinode[cnt]->i_mutex);
+				toputinode[cnt]->i_flags &= ~(S_IMMUTABLE |
+				  S_NOATIME | S_NOQUOTA);
+				toputinode[cnt]->i_flags |= old_flags[cnt];
+				truncate_inode_pages(&toputinode[cnt]->i_data,
+						     0);
+				mutex_unlock(&toputinode[cnt]->i_mutex);
+
+				mutex_lock(&ui->ui_mutex);
+				release = ui->dirty;
+				mark_inode_dirty_sync(toputinode[cnt]);
+				mutex_unlock(&ui->ui_mutex);
+			} else {
+				release = 1;
+			}
+			mutex_unlock(&dqopt->dqonoff_mutex);
+			/* Release the budget if we don't need to update the inode */
+			if (release)
+				ubifs_release_budget(c, &req);
+		}
+
+	return 0;
+}
+
+static const struct quotactl_ops ubifs_quotactl_ops = {
+	.quota_on	= dquot_quota_on,
+	.quota_off	= dquot_quota_off,
+	.quota_sync	= dquot_quota_sync,
+	.get_state	= dquot_get_state,
+	.set_info	= dquot_set_dqinfo,
+	.get_dqblk	= dquot_get_dqblk,
+	.set_dqblk	= dquot_set_dqblk,
+	.restore_iflags	= ubifs_restore_iflags
+};
+#endif
+
 static int ubifs_fill_super(struct super_block *sb, void *data, int silent)
 {
 	struct ubifs_info *c = sb->s_fs_info;
