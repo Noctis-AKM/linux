@@ -428,6 +428,10 @@ struct quotactl_ops {
 	int (*set_dqblk)(struct super_block *, struct kqid, struct qc_dqblk *);
 	int (*get_state)(struct super_block *, struct qc_state *);
 	int (*rm_xquota)(struct super_block *, unsigned int);
+	/*
+	 * used in quota_disable to restore the i_flags of quota files.
+	 */
+	int (*restore_iflags)(struct super_block *sb, struct inode **, unsigned int *);
 };
 
 struct quota_format_type {
