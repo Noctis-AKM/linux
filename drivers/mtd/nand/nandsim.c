@@ -1456,9 +1456,8 @@ static void do_bit_flips(struct nandsim *ns, int num)
 			int pos = prandom_u32() % (num * 8);
 			ns->buf.byte[pos / 8] ^= (1 << (pos % 8));
 			NS_WARN("read_page: flipping bit %d in page %d "
-				"reading from %d ecc: corrected=%u failed=%u\n",
-				pos, ns->regs.row, ns->regs.column + ns->regs.off,
-				nsmtd->ecc_stats.corrected, nsmtd->ecc_stats.failed);
+				"reading from %d\n",
+				pos, ns->regs.row, ns->regs.column + ns->regs.off);
 		}
 	}
 }
