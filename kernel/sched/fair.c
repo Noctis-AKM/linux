@@ -726,7 +726,7 @@ static void update_curr(struct cfs_rq *cfs_rq)
 		struct task_struct *curtask = task_of(curr);
 
 		trace_sched_stat_runtime(curtask, delta_exec, curr->vruntime);
-		cpuacct_charge(curtask, delta_exec);
+		cpu_usage_charge(curtask, delta_exec);
 		account_group_exec_runtime(curtask, delta_exec);
 	}
 

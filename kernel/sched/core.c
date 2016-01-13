@@ -7349,11 +7349,14 @@ int in_sched_functions(unsigned long addr)
 }
 
 #ifdef CONFIG_CGROUP_SCHED
+DEFINE_PER_CPU(u64, root_cpuusage);
 /*
  * Default task group.
  * Every task in system belongs to this group at bootup.
  */
-struct task_group root_task_group;
+struct task_group root_task_group = {
+	.cpuusage	= &root_cpuusage,
+};
 LIST_HEAD(task_groups);
 #endif
 
@@ -7692,10 +7695,26 @@ void set_curr_task(int cpu, struct task_struct *p)
 /* task_group_lock serializes the addition/removal of task groups */
 static DEFINE_SPINLOCK(task_group_lock);
 
+static int alloc_cpuusage(struct task_group *tg)
+{
+	tg->cpuusage = alloc_percpu(u64);
+	if (!tg->cpuusage)
+		goto err;
+	return 0;
+err:
+	return -ENOMEM;
+}
+
+static void free_cpuusage(struct task_group *tg)
+{
+	free_percpu(tg->cpuusage);
+}
+
 static void free_sched_group(struct task_group *tg)
 {
 	free_fair_sched_group(tg);
 	free_rt_sched_group(tg);
+	free_cpuusage(tg);
 	autogroup_free(tg);
 	kfree(tg);
 }
@@ -7713,6 +7732,9 @@ struct task_group *sched_create_group(struct task_group *parent)
 		goto err;
 
 	if (!alloc_rt_sched_group(tg, parent))
+		goto err;
+
+	if (alloc_cpuusage(tg))
 		goto err;
 
 	return tg;
@@ -8194,6 +8216,35 @@ static inline struct task_group *css_tg(struct cgroup_subsys_state *css)
 	return css ? container_of(css, struct task_group, css) : NULL;
 }
 
+static inline struct task_group *parent_tg(struct task_group *tg)
+{
+	return css_tg(tg->css.parent);
+}
+
+void cpu_usage_charge(struct task_struct *tsk, u64 cputime)
+{
+	struct task_group *tg;
+	int cpu;
+
+	cpu = task_cpu(tsk);
+
+	rcu_read_lock();
+
+	tg = task_group(tsk);
+
+	while (true) {
+		u64 *cpuusage = per_cpu_ptr(tg->cpuusage, cpu);
+		*cpuusage += cputime;
+
+		tg = parent_tg(tg);
+		if (!tg)
+			break;
+	}
+	rcu_read_unlock();
+
+	cpuacct_charge(tsk, cputime);
+}
+
 static struct cgroup_subsys_state *
 cpu_cgroup_css_alloc(struct cgroup_subsys_state *parent_css)
 {
@@ -8552,7 +8603,90 @@ static u64 cpu_rt_period_read_uint(struct cgroup_subsys_state *css,
 }
 #endif /* CONFIG_RT_GROUP_SCHED */
 
-static struct cftype cpu_files[] = {
+static u64 cpu_usage_percpu_read(struct task_group *tg, int cpu)
+{
+	u64 *cpuusage = per_cpu_ptr(tg->cpuusage, cpu);
+	u64 data;
+
+#ifndef CONFIG_64BIT
+	/*
+	 * Take rq->lock to make 64-bit read safe on 32-bit platforms.
+	 */
+	raw_spin_lock_irq(&cpu_rq(cpu)->lock);
+	data = *cpuusage;
+	raw_spin_unlock_irq(&cpu_rq(cpu)->lock);
+#else
+	data = *cpuusage;
+#endif
+
+	return data;
+}
+
+static void cpu_usage_percpu_write(struct task_group *tg, int cpu, u64 val)
+{
+	u64 *cpuusage = per_cpu_ptr(tg->cpuusage, cpu);
+
+#ifndef CONFIG_64BIT
+	/*
+	 * Take rq->lock to make 64-bit write safe on 32-bit platforms.
+	 */
+	raw_spin_lock_irq(&cpu_rq(cpu)->lock);
+	*cpuusage = val;
+	raw_spin_unlock_irq(&cpu_rq(cpu)->lock);
+#else
+	*cpuusage = val;
+#endif
+}
+
+static u64 cpu_usage_read(struct cgroup_subsys_state *css, struct cftype *cft)
+{
+	struct task_group *tg = css_tg(css);
+	u64 totalcpuusage = 0;
+	int i;
+
+	for_each_present_cpu(i)
+		totalcpuusage += cpu_usage_percpu_read(tg, i);
+
+	return totalcpuusage;
+}
+
+static int cpu_usage_write(struct cgroup_subsys_state *css, struct cftype *cft,
+			   u64 val)
+{
+	struct task_group *tg = css_tg(css);
+	int err = 0;
+	int i;
+
+	/*
+	 * Only allow '0' here to do a reset.
+	 */
+	if (val) {
+		err = -EINVAL;
+		goto out;
+	}
+
+	for_each_present_cpu(i)
+		cpu_usage_percpu_write(tg, i, 0);
+
+out:
+	return err;
+}
+
+static int cpu_usage_percpu_seq_show(struct seq_file *m, void *V)
+{
+	struct task_group *tg = css_tg(seq_css(m));
+	u64 percpu;
+	int i;
+
+	for_each_present_cpu(i) {
+		percpu = cpu_usage_percpu_read(tg, i);
+		seq_printf(m, "%llu ", (unsigned long long) percpu);
+	}
+	seq_printf(m, "\n");
+	return 0;
+}
+
+static struct cftype cpu_legacy_files[] = {
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	{
 		.name = "shares",
@@ -8591,6 +8725,54 @@ static struct cftype cpu_files[] = {
 	{ }	/* terminate */
 };
 
+static struct cftype cpu_files[] = {
+#ifdef CONFIG_FAIR_GROUP_SCHED
+	{
+		.name = "shares",
+		.read_u64 = cpu_shares_read_u64,
+		.write_u64 = cpu_shares_write_u64,
+	},
+#endif
+#ifdef CONFIG_CFS_BANDWIDTH
+	{
+		.name = "cfs_quota_us",
+		.read_s64 = cpu_cfs_quota_read_s64,
+		.write_s64 = cpu_cfs_quota_write_s64,
+	},
+	{
+		.name = "cfs_period_us",
+		.read_u64 = cpu_cfs_period_read_u64,
+		.write_u64 = cpu_cfs_period_write_u64,
+	},
+	{
+		.name = "stat",
+		.seq_show = cpu_stats_show,
+	},
+#endif
+#ifdef CONFIG_RT_GROUP_SCHED
+	{
+		.name = "rt_runtime_us",
+		.read_s64 = cpu_rt_runtime_read,
+		.write_s64 = cpu_rt_runtime_write,
+	},
+	{
+		.name = "rt_period_us",
+		.read_u64 = cpu_rt_period_read_uint,
+		.write_u64 = cpu_rt_period_write_uint,
+	},
+#endif
+	{
+		.name = "usage",
+		.read_u64 = cpu_usage_read,
+		.write_u64 = cpu_usage_write,
+	},
+	{
+		.name = "usage_percpu",
+		.seq_show = cpu_usage_percpu_seq_show,
+	},
+	{ }	/* terminate */
+};
+
 struct cgroup_subsys cpu_cgrp_subsys = {
 	.css_alloc	= cpu_cgroup_css_alloc,
 	.css_free	= cpu_cgroup_css_free,
@@ -8599,7 +8781,8 @@ struct cgroup_subsys cpu_cgrp_subsys = {
 	.fork		= cpu_cgroup_fork,
 	.can_attach	= cpu_cgroup_can_attach,
 	.attach		= cpu_cgroup_attach,
-	.legacy_cftypes	= cpu_files,
+	.dfl_cftypes	= cpu_files,
+	.legacy_cftypes	= cpu_legacy_files,
 	.early_init	= 1,
 };
 

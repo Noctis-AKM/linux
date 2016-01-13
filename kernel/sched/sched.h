@@ -266,6 +266,9 @@ struct task_group {
 	struct list_head siblings;
 	struct list_head children;
 
+	/* cpuusage holds pointer to a u64-type object on every cpu */
+	u64 __percpu *cpuusage;
+
 #ifdef CONFIG_SCHED_AUTOGROUP
 	struct autogroup *autogroup;
 #endif
@@ -336,9 +339,16 @@ extern void sched_move_task(struct task_struct *tsk);
 extern int sched_group_set_shares(struct task_group *tg, unsigned long shares);
 #endif
 
+extern void cpu_usage_charge(struct task_struct *tsk, u64 cputime);
+
 #else /* CONFIG_CGROUP_SCHED */
 
 struct cfs_bandwidth { };
+
+static inline void cpu_usage_charge(struct task_struct *tsk, u64 cputime)
+{
+	cpuacct_charge(tsk, cputime);	
+}
 
 #endif	/* CONFIG_CGROUP_SCHED */
 
