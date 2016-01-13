@@ -236,6 +236,17 @@ struct cfs_bandwidth {
 #endif
 };
 
+enum cpu_usage_index {
+	CPU_USAGE_USER,		/* ... user mode */
+	CPU_USAGE_SYSTEM,	/* ... kernel mode */
+
+	CPU_USAGE_NRUSAGE,
+};
+
+struct cpu_usage {
+	u64	usages[CPU_USAGE_NRUSAGE];
+};
+
 /* task group related information */
 struct task_group {
 	struct cgroup_subsys_state css;
@@ -266,8 +277,8 @@ struct task_group {
 	struct list_head siblings;
 	struct list_head children;
 
-	/* cpuusage holds pointer to a u64-type object on every cpu */
-	u64 __percpu *cpuusage;
+	/* cpuusage holds pointer to a cpu_usage on every cpu */
+	struct cpu_usage __percpu *cpuusage;
 
 #ifdef CONFIG_SCHED_AUTOGROUP
 	struct autogroup *autogroup;

@@ -7349,7 +7349,7 @@ int in_sched_functions(unsigned long addr)
 }
 
 #ifdef CONFIG_CGROUP_SCHED
-DEFINE_PER_CPU(u64, root_cpuusage);
+DEFINE_PER_CPU(struct cpu_usage, root_cpuusage);
 /*
  * Default task group.
  * Every task in system belongs to this group at bootup.
@@ -7697,7 +7697,7 @@ static DEFINE_SPINLOCK(task_group_lock);
 
 static int alloc_cpuusage(struct task_group *tg)
 {
-	tg->cpuusage = alloc_percpu(u64);
+	tg->cpuusage = alloc_percpu(struct cpu_usage);
 	if (!tg->cpuusage)
 		goto err;
 	return 0;
@@ -8224,7 +8224,9 @@ static inline struct task_group *parent_tg(struct task_group *tg)
 void cpu_usage_charge(struct task_struct *tsk, u64 cputime)
 {
 	struct task_group *tg;
+	struct cpu_usage *cpuusage;
 	int cpu;
+	int user_time;
 
 	cpu = task_cpu(tsk);
 
@@ -8232,9 +8234,15 @@ void cpu_usage_charge(struct task_struct *tsk, u64 cputime)
 
 	tg = task_group(tsk);
 
+	user_time = user_mode(task_pt_regs(tsk));
+
 	while (true) {
-		u64 *cpuusage = per_cpu_ptr(tg->cpuusage, cpu);
-		*cpuusage += cputime;
+		cpuusage = per_cpu_ptr(tg->cpuusage, cpu);
+
+		if (user_time)
+			cpuusage->usages[CPU_USAGE_USER] += cputime;
+		else
+			cpuusage->usages[CPU_USAGE_SYSTEM] += cputime;
 
 		tg = parent_tg(tg);
 		if (!tg)
@@ -8603,51 +8611,101 @@ static u64 cpu_rt_period_read_uint(struct cgroup_subsys_state *css,
 }
 #endif /* CONFIG_RT_GROUP_SCHED */
 
-static u64 cpu_usage_percpu_read(struct task_group *tg, int cpu)
+static u64 cpu_usage_percpu_read(struct task_group *tg, int cpu,
+				 enum cpu_usage_index index)
 {
-	u64 *cpuusage = per_cpu_ptr(tg->cpuusage, cpu);
-	u64 data;
+	struct cpu_usage *cpuusage = per_cpu_ptr(tg->cpuusage, cpu);
+	u64 data = 0;
+	int i = 0;
+
+	/*
+	 * Allow index == CPU_USAGE_NRUSAGE here to read
+	 * the sum of suages.
+	 */
+	BUG_ON(index > CPU_USAGE_NRUSAGE);
+
+	if (index == CPU_USAGE_NRUSAGE) {
+		raw_spin_lock_irq(&cpu_rq(cpu)->lock);
+		for (i = 0; i < CPU_USAGE_NRUSAGE; i++)
+			data += cpuusage->usages[i];
+		raw_spin_unlock_irq(&cpu_rq(cpu)->lock);
+
+		goto out;
+	}
 
 #ifndef CONFIG_64BIT
 	/*
 	 * Take rq->lock to make 64-bit read safe on 32-bit platforms.
 	 */
 	raw_spin_lock_irq(&cpu_rq(cpu)->lock);
-	data = *cpuusage;
+	data = cpuusage->usages[index];
 	raw_spin_unlock_irq(&cpu_rq(cpu)->lock);
 #else
-	data = *cpuusage;
+	data = cpuusage->usages[index];
 #endif
 
+out:
 	return data;
 }
 
-static void cpu_usage_percpu_write(struct task_group *tg, int cpu, u64 val)
+static void cpu_usage_percpu_write(struct task_group *tg, int cpu,
+				   enum cpu_usage_index index, u64 val)
 {
-	u64 *cpuusage = per_cpu_ptr(tg->cpuusage, cpu);
+	struct cpu_usage *cpuusage = per_cpu_ptr(tg->cpuusage, cpu);
+	int i = 0;
+
+	/*
+	 * Allow index == CPU_USAGE_NRUSAGE here to write
+	 * val to each index of usages.
+	 */
+	BUG_ON(index > CPU_USAGE_NRUSAGE);
+
+	if (index == CPU_USAGE_NRUSAGE) {
+		raw_spin_lock_irq(&cpu_rq(cpu)->lock);
+		for (i = 0; i < CPU_USAGE_NRUSAGE; i++)
+			cpuusage->usages[i] = val;
+		raw_spin_unlock_irq(&cpu_rq(cpu)->lock);
+
+		return;
+	}
 
 #ifndef CONFIG_64BIT
 	/*
 	 * Take rq->lock to make 64-bit write safe on 32-bit platforms.
 	 */
 	raw_spin_lock_irq(&cpu_rq(cpu)->lock);
-	*cpuusage = val;
+	cpuusage->usages[index] = val;
 	raw_spin_unlock_irq(&cpu_rq(cpu)->lock);
 #else
-	*cpuusage = val;
+	cpuusage->usages[index] = val;
 #endif
 }
 
-static u64 cpu_usage_read(struct cgroup_subsys_state *css, struct cftype *cft)
+static u64 __cpu_usage_read(struct cgroup_subsys_state *css, enum cpu_usage_index index)
 {
 	struct task_group *tg = css_tg(css);
 	u64 totalcpuusage = 0;
 	int i;
 
 	for_each_present_cpu(i)
-		totalcpuusage += cpu_usage_percpu_read(tg, i);
+		totalcpuusage += cpu_usage_percpu_read(tg, i, index);
 
 	return totalcpuusage;
+}
+
+static u64 cpu_usage_user_read(struct cgroup_subsys_state *css, struct cftype *cft)
+{
+	return __cpu_usage_read(css, CPU_USAGE_USER);
+}
+
+static u64 cpu_usage_sys_read(struct cgroup_subsys_state *css, struct cftype *cft)
+{
+	return __cpu_usage_read(css, CPU_USAGE_SYSTEM);
+}
+
+static u64 cpu_usage_read(struct cgroup_subsys_state *css, struct cftype *cft)
+{
+	return __cpu_usage_read(css, CPU_USAGE_NRUSAGE);
 }
 
 static int cpu_usage_write(struct cgroup_subsys_state *css, struct cftype *cft,
@@ -8666,24 +8724,39 @@ static int cpu_usage_write(struct cgroup_subsys_state *css, struct cftype *cft,
 	}
 
 	for_each_present_cpu(i)
-		cpu_usage_percpu_write(tg, i, 0);
+		cpu_usage_percpu_write(tg, i, CPU_USAGE_NRUSAGE, 0);
 
 out:
 	return err;
 }
 
-static int cpu_usage_percpu_seq_show(struct seq_file *m, void *V)
+static int __cpu_usage_percpu_seq_show(struct seq_file *m, enum cpu_usage_index index)
 {
 	struct task_group *tg = css_tg(seq_css(m));
 	u64 percpu;
 	int i;
 
 	for_each_present_cpu(i) {
-		percpu = cpu_usage_percpu_read(tg, i);
+		percpu = cpu_usage_percpu_read(tg, i, index);
 		seq_printf(m, "%llu ", (unsigned long long) percpu);
 	}
 	seq_printf(m, "\n");
 	return 0;
+}
+
+static int cpu_usage_percpu_user_seq_show(struct seq_file *m, void *V)
+{
+	return __cpu_usage_percpu_seq_show(m, CPU_USAGE_USER);
+}
+
+static int cpu_usage_percpu_sys_seq_show(struct seq_file *m, void *V)
+{
+	return __cpu_usage_percpu_seq_show(m, CPU_USAGE_SYSTEM);
+}
+
+static int cpu_usage_percpu_seq_show(struct seq_file *m, void *V)
+{
+	return __cpu_usage_percpu_seq_show(m, CPU_USAGE_NRUSAGE);
 }
 
 static struct cftype cpu_legacy_files[] = {
@@ -8767,8 +8840,24 @@ static struct cftype cpu_files[] = {
 		.write_u64 = cpu_usage_write,
 	},
 	{
+		.name = "usage_user",
+		.read_u64 = cpu_usage_user_read,
+	},
+	{
+		.name = "usage_sys",
+		.read_u64 = cpu_usage_sys_read,
+	},
+	{
 		.name = "usage_percpu",
 		.seq_show = cpu_usage_percpu_seq_show,
+	},
+	{
+		.name = "usage_percpu_user",
+		.seq_show = cpu_usage_percpu_user_seq_show,
+	},
+	{
+		.name = "usage_percpu_sys",
+		.seq_show = cpu_usage_percpu_sys_seq_show,
 	},
 	{ }	/* terminate */
 };
