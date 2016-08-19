@@ -7480,6 +7480,17 @@ F:	drivers/mtd/
 F:	include/linux/mtd/
 F:	include/uapi/mtd/
 
+MEMORY TECHNOLOGY DEVICES RAID (MTD RAID)
+M:	Dongsheng Yang <dongsheng081251@gmail.com>
+L:	linux-mtd@lists.infradead.org
+W:	http://www.linux-mtd.infradead.org/
+Q:	http://patchwork.ozlabs.org/project/linux-mtd/list/
+T:	git git://git.infradead.org/linux-mtd.git
+T:	git git://git.infradead.org/l2-mtd.git
+S:	Maintained
+F:	drivers/mtd/mtd_raid/
+F:	include/uapi/mtd/mtd-raid-user.h
+
 MEN A21 WATCHDOG DRIVER
 M:	Johannes Thumshirn <morbidrsa@gmail.com>
 L:	linux-watchdog@vger.kernel.org

@@ -1,0 +1,12 @@
+menuconfig MTD_RAID
+	tristate "MTD RAID Support"
+	depends on MTD
+	help
+	  This is a module for MTD raid. There are two ways to use
+	  it. One for multi-chips flash drivers, driver can call
+	  mtd_raid_create() to create raid device in requested level.
+	  The other for user, user can use problem of mtd_raid to
+	  create raid device from flashes they have in system.
+
+	  More about raid:
+	  <https://en.wikipedia.org/wiki/Standard_RAID_levels>.
