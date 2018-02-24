@@ -107,8 +107,8 @@ int ceph_fscache_register_fs(struct ceph_fs_client* fsc)
 		list_add_tail(&ent->list, &ceph_fscache_list);
 	} else {
 		kfree(ent);
-		pr_err("unable to register fscache cookie for fsid %pU\n",
-		       fsid);
+		pr_err("%s: unable to register fscache cookie for fsid %pU\n",
+			__func__, fsid);
 		/* all other fs ignore this error */
 	}
 out_unlock:

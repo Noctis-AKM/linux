@@ -359,7 +359,7 @@ nomem:
 	err = -ENOMEM;
 	goto out_err;
 bad:
-	pr_err("corrupt mdsmap\n");
+	pr_err("%s: corrupt mdsmap\n", __func__);
 	print_hex_dump(KERN_DEBUG, "mdsmap: ",
 		       DUMP_PREFIX_OFFSET, 16, 1,
 		       start, end - start, true);

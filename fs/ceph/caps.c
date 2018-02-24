@@ -713,8 +713,8 @@ void ceph_add_cap(struct inode *inode,
 			if (oldrealm)
 				ceph_put_snap_realm(mdsc, oldrealm);
 		} else {
-			pr_err("ceph_add_cap: couldn't find snap realm %llx\n",
-			       realmino);
+			pr_err("%s: couldn't find snap realm %llx\n",
+			       __func__, realmino);
 			WARN_ON(!realm);
 		}
 	}
@@ -1535,8 +1535,9 @@ static void __ceph_flush_snaps(struct ceph_inode_info *ci,
 		ret = __send_flush_snap(inode, session, capsnap, cap->mseq,
 					oldest_flush_tid);
 		if (ret < 0) {
-			pr_err("__flush_snaps: error sending cap flushsnap, "
+			pr_err("%s: error sending cap flushsnap, "
 			       "ino (%llx.%llx) tid %llu follows %llu\n",
+				__func__,
 				ceph_vinop(inode), cf->tid, capsnap->follows);
 		}
 
@@ -2312,8 +2313,8 @@ static void __kick_flushing_caps(struct ceph_mds_client *mdsc,
 
 		cap = ci->i_auth_cap;
 		if (!(cap && cap->session == session)) {
-			pr_err("%p auth cap %p not mds%d ???\n",
-			       inode, cap, session->s_mds);
+			pr_err("%s: %p auth cap %p not mds%d ???\n",
+				__func__, inode, cap, session->s_mds);
 			break;
 		}
 
@@ -2329,9 +2330,10 @@ static void __kick_flushing_caps(struct ceph_mds_client *mdsc,
 					  cap->issued | cap->implemented,
 					  cf->caps, cf->tid, oldest_flush_tid);
 			if (ret) {
-				pr_err("kick_flushing_caps: error sending "
+				pr_err("%s: error sending "
 					"cap flush, ino (%llx.%llx) "
 					"tid %llu flushing %s\n",
+					__func__,
 					ceph_vinop(inode), cf->tid,
 					ceph_cap_string(cf->caps));
 			}
@@ -2349,9 +2351,10 @@ static void __kick_flushing_caps(struct ceph_mds_client *mdsc,
 			ret = __send_flush_snap(inode, session, capsnap, cap->mseq,
 						oldest_flush_tid);
 			if (ret < 0) {
-				pr_err("kick_flushing_caps: error sending "
+				pr_err("%s: error sending "
 					"cap flushsnap, ino (%llx.%llx) "
 					"tid %llu follows %llu\n",
+					__func__,
 					ceph_vinop(inode), cf->tid,
 					capsnap->follows);
 			}
@@ -2380,8 +2383,8 @@ void ceph_early_kick_flushing_caps(struct ceph_mds_client *mdsc,
 		spin_lock(&ci->i_ceph_lock);
 		cap = ci->i_auth_cap;
 		if (!(cap && cap->session == session)) {
-			pr_err("%p auth cap %p not mds%d ???\n",
-				&ci->vfs_inode, cap, session->s_mds);
+			pr_err("%s: %p auth cap %p not mds%d ???\n",
+				__func__, &ci->vfs_inode, cap, session->s_mds);
 			spin_unlock(&ci->i_ceph_lock);
 			continue;
 		}
@@ -2423,8 +2426,8 @@ void ceph_kick_flushing_caps(struct ceph_mds_client *mdsc,
 		spin_lock(&ci->i_ceph_lock);
 		cap = ci->i_auth_cap;
 		if (!(cap && cap->session == session)) {
-			pr_err("%p auth cap %p not mds%d ???\n",
-				&ci->vfs_inode, cap, session->s_mds);
+			pr_err("%s: %p auth cap %p not mds%d ???\n",
+				__func__, &ci->vfs_inode, cap, session->s_mds);
 			spin_unlock(&ci->i_ceph_lock);
 			continue;
 		}
@@ -3540,9 +3543,10 @@ retry:
 
 	issued = cap->issued;
 	if (issued != cap->implemented)
-		pr_err_ratelimited("handle_cap_export: issued != implemented: "
+		pr_err_ratelimited("%s: issued != implemented: "
 				"ino (%llx.%llx) mds%d seq %d mseq %d "
 				"issued %s implemented %s\n",
+				__func__,
 				ceph_vinop(inode), mds, cap->seq, cap->mseq,
 				ceph_cap_string(issued),
 				ceph_cap_string(cap->implemented));
@@ -3692,10 +3696,11 @@ retry:
 		if ((ph->flags & CEPH_CAP_FLAG_AUTH) &&
 		    (ocap->seq != le32_to_cpu(ph->seq) ||
 		     ocap->mseq != le32_to_cpu(ph->mseq))) {
-			pr_err_ratelimited("handle_cap_import: "
+			pr_err_ratelimited("%s: "
 					"mismatched seq/mseq: ino (%llx.%llx) "
 					"mds%d seq %d mseq %d importer mds%d "
 					"has peer seq %d mseq %d\n",
+					__func__,
 					ceph_vinop(inode), peer, ocap->seq,
 					ocap->mseq, mds, le32_to_cpu(ph->seq),
 					le32_to_cpu(ph->mseq));
@@ -3907,7 +3912,7 @@ void ceph_handle_caps(struct ceph_mds_session *session,
 
 	default:
 		spin_unlock(&ci->i_ceph_lock);
-		pr_err("ceph_handle_caps: unknown cap op %d %s\n", op,
+		pr_err("%s: unknown cap op %d %s\n", __func__, op,
 		       ceph_cap_op_name(op));
 	}
 
@@ -3929,7 +3934,7 @@ done_unlocked:
 	return;
 
 bad:
-	pr_err("ceph_handle_caps: corrupt message\n");
+	pr_err("%s: corrupt message\n", __func__);
 	ceph_msg_dump(msg);
 	return;
 }

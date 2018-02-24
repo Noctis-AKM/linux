@@ -281,8 +281,10 @@ static int ceph_fill_dirfrag(struct inode *inode,
 	if (IS_ERR(frag)) {
 		/* this is not the end of the world; we can continue
 		   with bad/inaccurate delegation info */
-		pr_err("fill_dirfrag ENOMEM on mds ref %llx.%llx fg %x\n",
-		       ceph_vinop(inode), le32_to_cpu(dirinfo->frag));
+		pr_err("%s: ENOMEM on mds ref %llx.%llx fg %x\n",
+			__func__,
+			ceph_vinop(inode), le32_to_cpu(dirinfo->frag));
+
 		err = -ENOMEM;
 		goto out;
 	}
@@ -361,9 +363,11 @@ static int ceph_fill_fragtree(struct inode *inode,
 		id = le32_to_cpu(fragtree->splits[i].frag);
 		split_by = le32_to_cpu(fragtree->splits[i].by);
 		if (split_by == 0 || ceph_frag_bits(id) + split_by > 24) {
-			pr_err("fill_fragtree %llx.%llx invalid split %d/%u, "
-			       "frag %x split by %d\n", ceph_vinop(inode),
-			       i, nsplits, id, split_by);
+			pr_err("%s: %llx.%llx invalid split %d/%u, "
+				"frag %x split by %d\n",
+				__func__, ceph_vinop(inode),
+				i, nsplits, id, split_by);
+
 			continue;
 		}
 		frag = NULL;
@@ -618,7 +622,7 @@ int ceph_fill_file_size(struct inode *inode, int issued,
 	    (truncate_seq == ci->i_truncate_seq && size > inode->i_size)) {
 		dout("size %lld -> %llu\n", inode->i_size, size);
 		if (size > 0 && S_ISDIR(inode->i_mode)) {
-			pr_err("fill_file_size non-zero size for directory\n");
+			pr_err("%s: non-zero size for directory\n", __func__);
 			size = 0;
 		}
 		i_size_write(inode, size);
@@ -771,8 +775,8 @@ static int fill_inode(struct inode *inode, struct page *locked_page,
 	if (iinfo->xattr_len > 4) {
 		xattr_blob = ceph_buffer_new(iinfo->xattr_len, GFP_NOFS);
 		if (!xattr_blob)
-			pr_err("fill_inode ENOMEM xattr blob %d bytes\n",
-			       iinfo->xattr_len);
+			pr_err("%s: ENOMEM xattr blob %d bytes\n",
+				__func__, iinfo->xattr_len);
 	}
 
 	if (iinfo->pool_ns_len > 0)
@@ -903,8 +907,9 @@ static int fill_inode(struct inode *inode, struct page *locked_page,
 			spin_unlock(&ci->i_ceph_lock);
 
 			if (symlen != i_size_read(inode)) {
-				pr_err("fill_inode %llx.%llx BAD symlink "
-					"size %lld\n", ceph_vinop(inode),
+				pr_err("%s: %llx.%llx BAD symlink "
+					"size %lld\n",
+					__func__, ceph_vinop(inode),
 					i_size_read(inode));
 				i_size_write(inode, symlen);
 				inode->i_blocks = calc_inode_blocks(symlen);
@@ -937,8 +942,8 @@ static int fill_inode(struct inode *inode, struct page *locked_page,
 		ceph_decode_timespec(&ci->i_rctime, &info->rctime);
 		break;
 	default:
-		pr_err("fill_inode %llx.%llx BAD mode 0%o\n",
-		       ceph_vinop(inode), inode->i_mode);
+		pr_err("%s: %llx.%llx BAD mode 0%o\n",
+			__func__, ceph_vinop(inode), inode->i_mode);
 	}
 
 	/* were we issued a capability? */
@@ -1129,8 +1134,8 @@ static struct dentry *splice_dentry(struct dentry *dn, struct inode *in)
 		d_drop(dn);
 	realdn = d_splice_alias(in, dn);
 	if (IS_ERR(realdn)) {
-		pr_err("splice_dentry error %ld %p inode %p ino %llx.%llx\n",
-		       PTR_ERR(realdn), dn, in, ceph_vinop(in));
+		pr_err("%s: error %ld %p inode %p ino %llx.%llx\n",
+			__func__, PTR_ERR(realdn), dn, in, ceph_vinop(in));
 		dn = realdn; /* note realdn contains the error */
 		goto out;
 	} else if (realdn) {
@@ -1257,8 +1262,8 @@ retry_lookup:
 				rinfo->head->result == 0) ?  req->r_fmode : -1,
 				&req->r_caps_reservation);
 		if (err < 0) {
-			pr_err("fill_inode badness %p %llx.%llx\n",
-				in, ceph_vinop(in));
+			pr_err("%s: badness %p %llx.%llx\n",
+				__func__, in, ceph_vinop(in));
 			goto done;
 		}
 	}
@@ -1452,7 +1457,7 @@ static int readdir_prepopulate_inodes_only(struct ceph_mds_request *req,
 				req->r_request_started, -1,
 				&req->r_caps_reservation);
 		if (rc < 0) {
-			pr_err("fill_inode badness on %p got %d\n", in, rc);
+			pr_err("%s: badness on %p got %d\n", __func__, in, rc);
 			err = rc;
 		}
 		iput(in);
@@ -1652,7 +1657,7 @@ retry_lookup:
 				 req->r_request_started, -1,
 				 &req->r_caps_reservation);
 		if (ret < 0) {
-			pr_err("fill_inode badness on %p\n", in);
+			pr_err("%s: badness on %p\n", __func__, in);
 			if (d_really_is_negative(dn))
 				iput(in);
 			d_drop(dn);

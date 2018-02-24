@@ -390,7 +390,7 @@ fail:
 		ceph_put_snap_context(realm->cached_context);
 		realm->cached_context = NULL;
 	}
-	pr_err("build_snap_context %llx %p fail %d\n", realm->ino,
+	pr_err("%s: %llx %p fail %d\n", __func__, realm->ino,
 	       realm, err);
 	return err;
 }
@@ -464,7 +464,8 @@ void ceph_queue_cap_snap(struct ceph_inode_info *ci)
 
 	capsnap = kzalloc(sizeof(*capsnap), GFP_NOFS);
 	if (!capsnap) {
-		pr_err("ENOMEM allocating ceph_cap_snap on %p\n", inode);
+		pr_err("%s: ENOMEM allocating ceph_cap_snap on %p\n",
+			__func__, inode);
 		return;
 	}
 
@@ -770,7 +771,7 @@ fail:
 		ceph_put_snap_realm(mdsc, realm);
 	if (first_realm)
 		ceph_put_snap_realm(mdsc, first_realm);
-	pr_err("update_snap_trace error %d\n", err);
+	pr_err("%s: error %d\n", __func__, err);
 	return err;
 }
 
@@ -978,7 +979,7 @@ skip_inode:
 	return;
 
 bad:
-	pr_err("corrupt snap message from mds%d\n", mds);
+	pr_err("%s: corrupt snap message from mds%d\n", __func__, mds);
 	ceph_msg_dump(msg);
 out:
 	if (locked_rwsem)

@@ -216,8 +216,7 @@ static int parse_fsopt_token(char *c, void *private)
 	if (token < Opt_last_int) {
 		ret = match_int(&argstr[0], &intval);
 		if (ret < 0) {
-			pr_err("bad mount option arg (not int) "
-			       "at '%s'\n", c);
+			pr_err("bad mount option arg (not int) at '%s'\n", c);
 			return ret;
 		}
 		dout("got int token %d val %d\n", token, intval);
@@ -479,7 +478,7 @@ static int parse_mount_options(struct ceph_mount_options **pfsopt,
 	dev_name_end--;		/* back up to ':' separator */
 	if (dev_name_end < dev_name || *dev_name_end != ':') {
 		pr_err("device name is missing path (no : separator in %s)\n",
-				dev_name);
+		       dev_name);
 		goto out;
 	}
 	dout("device name '%.*s'\n", (int)(dev_name_end - dev_name), dev_name);
