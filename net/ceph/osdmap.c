@@ -721,7 +721,7 @@ static void __remove_pg_pool(struct rb_root *root, struct ceph_pg_pool_info *pi)
 static int decode_pool(void **p, void *end, struct ceph_pg_pool_info *pi)
 {
 	u8 ev, cv;
-	unsigned len, num;
+	unsigned int len, num;
 	void *pool_end;
 
 	ceph_decode_need(p, end, 2 + 4, bad);
@@ -2234,7 +2234,7 @@ static u32 raw_pg_to_pps(struct ceph_pg_pool_info *pi,
 		 */
 		return ceph_stable_mod(raw_pgid->seed, pi->pgp_num,
 				       pi->pgp_num_mask) +
-		       (unsigned)raw_pgid->pool;
+		       (unsigned int)raw_pgid->pool;
 	}
 }
 

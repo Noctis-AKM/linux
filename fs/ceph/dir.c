@@ -59,7 +59,7 @@ static int ceph_d_init(struct dentry *dentry)
 #define OFFSET_BITS	28
 #define OFFSET_MASK	((1 << OFFSET_BITS) - 1)
 #define HASH_ORDER	(0xffull << (OFFSET_BITS + 24))
-loff_t ceph_make_fpos(unsigned high, unsigned off, bool hash_order)
+loff_t ceph_make_fpos(unsigned int high, unsigned int off, bool hash_order)
 {
 	loff_t fpos = ((loff_t)high << 28) | (loff_t)off;
 	if (hash_order)
@@ -72,17 +72,17 @@ static bool is_hash_order(loff_t p)
 	return (p & HASH_ORDER) == HASH_ORDER;
 }
 
-static unsigned fpos_frag(loff_t p)
+static unsigned int fpos_frag(loff_t p)
 {
 	return p >> OFFSET_BITS;
 }
 
-static unsigned fpos_hash(loff_t p)
+static unsigned int fpos_hash(loff_t p)
 {
 	return ceph_frag_value(fpos_frag(p));
 }
 
-static unsigned fpos_off(loff_t p)
+static unsigned int fpos_off(loff_t p)
 {
 	return p & OFFSET_MASK;
 }
@@ -102,7 +102,7 @@ static int fpos_cmp(loff_t l, loff_t r)
  * server.
  */
 static int note_last_dentry(struct ceph_dir_file_info *dfi, const char *name,
-		            int len, unsigned next_offset)
+			    int len, unsigned int next_offset)
 {
 	char *buf = kmalloc(len+1, GFP_KERNEL);
 	if (!buf)
@@ -123,7 +123,7 @@ __dcache_find_get_entry(struct dentry *parent, u64 idx,
 {
 	struct inode *dir = d_inode(parent);
 	struct dentry *dentry;
-	unsigned idx_mask = (PAGE_SIZE / sizeof(struct dentry *)) - 1;
+	unsigned int idx_mask = (PAGE_SIZE / sizeof(struct dentry *)) - 1;
 	loff_t ptr_pos = idx * sizeof(struct dentry *);
 	pgoff_t ptr_pgoff = ptr_pos >> PAGE_SHIFT;
 
@@ -183,7 +183,8 @@ static int __dcache_readdir(struct file *file,  struct dir_context *ctx,
 	u64 idx = 0;
 	int err = 0;
 
-	dout("__dcache_readdir %p v%u at %llx\n", dir, (unsigned)shared_gen, ctx->pos);
+	dout("__dcache_readdir %p v%u at %llx\n", dir,
+			(unsigned int)shared_gen, ctx->pos);
 
 	/* search start position */
 	if (ctx->pos > 2) {
@@ -305,7 +306,7 @@ static int ceph_readdir(struct file *file, struct dir_context *ctx)
 	struct ceph_mds_client *mdsc = fsc->mdsc;
 	int i;
 	int err;
-	unsigned frag = -1;
+	unsigned int frag = -1;
 	struct ceph_mds_reply_info_parsed *rinfo;
 
 	dout("readdir %p file %p pos %llx\n", inode, file, ctx->pos);
@@ -364,7 +365,7 @@ more:
 		if (is_hash_order(ctx->pos)) {
 			/* fragtree isn't always accurate. choose frag
 			 * based on previous reply when possible. */
-			if (frag == (unsigned)-1)
+			if (frag == (unsigned int)-1)
 				frag = ceph_choose_frag(ci, fpos_hash(ctx->pos),
 							NULL, NULL);
 		} else {
@@ -461,7 +462,7 @@ more:
 		if (rinfo->dir_nr > 0) {
 			struct ceph_mds_reply_dir_entry *rde =
 					rinfo->dir_entries + (rinfo->dir_nr-1);
-			unsigned next_offset = req->r_reply_info.dir_end ?
+			unsigned int next_offset = req->r_reply_info.dir_end ?
 					2 : (fpos_off(rde->offset) + 1);
 			err = note_last_dentry(dfi, rde->name, rde->name_len,
 					       next_offset);
@@ -1202,8 +1203,8 @@ static int dir_lease_is_valid(struct inode *dir, struct dentry *dentry)
 		valid = __ceph_caps_issued_mask(ci, CEPH_CAP_FILE_SHARED, 1);
 	spin_unlock(&ci->i_ceph_lock);
 	dout("dir_lease_is_valid dir %p v%u dentry %p v%u = %d\n",
-	     dir, (unsigned)atomic_read(&ci->i_shared_gen),
-	     dentry, (unsigned)di->lease_shared_gen, valid);
+	     dir, (unsigned int)atomic_read(&ci->i_shared_gen),
+	     dentry, (unsigned int)di->lease_shared_gen, valid);
 	return valid;
 }
 
@@ -1407,7 +1408,7 @@ static ssize_t ceph_read_dir(struct file *file, char __user *buf, size_t size,
 
 	if (*ppos >= dfi->dir_info_len)
 		return 0;
-	size = min_t(unsigned, size, dfi->dir_info_len-*ppos);
+	size = min_t(unsigned int, size, dfi->dir_info_len-*ppos);
 	left = copy_to_user(buf, dfi->dir_info + *ppos, size);
 	if (left == size)
 		return -EFAULT;
@@ -1463,7 +1464,7 @@ void ceph_dentry_lru_del(struct dentry *dn)
  * Return name hash for a given dentry.  This is dependent on
  * the parent directory's hash function.
  */
-unsigned ceph_dentry_hash(struct inode *dir, struct dentry *dn)
+unsigned int ceph_dentry_hash(struct inode *dir, struct dentry *dn)
 {
 	struct ceph_inode_info *dci = ceph_inode(dir);
 

@@ -262,7 +262,7 @@ int ceph_readpage_from_fscache(struct inode *inode, struct page *page)
 int ceph_readpages_from_fscache(struct inode *inode,
 				  struct address_space *mapping,
 				  struct list_head *pages,
-				  unsigned *nr_pages)
+				  unsigned int *nr_pages)
 {
 	struct ceph_inode_info *ci = ceph_inode(inode);
 	int ret;

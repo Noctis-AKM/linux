@@ -181,7 +181,7 @@ static u32 __ceph_choose_frag(struct ceph_inode_info *ci, u32 v,
 {
 	u32 t = ceph_frag_make(0, 0);
 	struct ceph_inode_frag *frag;
-	unsigned nway, i;
+	unsigned int nway, i;
 	u32 n;
 
 	if (found)
@@ -325,7 +325,7 @@ static int ceph_fill_fragtree(struct inode *inode,
 	struct ceph_inode_info *ci = ceph_inode(inode);
 	struct ceph_inode_frag *frag, *prev_frag = NULL;
 	struct rb_node *rb_node;
-	unsigned i, split_by, nsplits;
+	unsigned int i, split_by, nsplits;
 	u32 id;
 	bool update = false;
 
@@ -949,7 +949,7 @@ static int fill_inode(struct inode *inode, struct page *locked_page,
 	/* were we issued a capability? */
 	if (info->cap.caps) {
 		if (ceph_snap(inode) == CEPH_NOSNAP) {
-			unsigned caps = le32_to_cpu(info->cap.caps);
+			unsigned int caps = le32_to_cpu(info->cap.caps);
 			ceph_add_cap(inode, session,
 				     le64_to_cpu(info->cap.cap_id),
 				     cap_fmode, caps,
@@ -1038,9 +1038,9 @@ static void update_dentry_lease(struct dentry *dentry,
 				struct ceph_vino *dir_vino)
 {
 	struct ceph_dentry_info *di = ceph_dentry(dentry);
-	long unsigned duration = le32_to_cpu(lease->duration_ms);
-	long unsigned ttl = from_time + (duration * HZ) / 1000;
-	long unsigned half_ttl = from_time + (duration * HZ / 2) / 1000;
+	unsigned long duration = le32_to_cpu(lease->duration_ms);
+	unsigned long ttl = from_time + (duration * HZ) / 1000;
+	unsigned long half_ttl = from_time + (duration * HZ / 2) / 1000;
 	struct inode *dir;
 	struct ceph_mds_session *old_lease_session = NULL;
 
@@ -1480,8 +1480,8 @@ static int fill_readdir_cache(struct inode *dir, struct dentry *dn,
 			      struct ceph_mds_request *req)
 {
 	struct ceph_inode_info *ci = ceph_inode(dir);
-	unsigned nsize = PAGE_SIZE / sizeof(struct dentry*);
-	unsigned idx = ctl->index % nsize;
+	unsigned int nsize = PAGE_SIZE / sizeof(struct dentry *);
+	unsigned int idx = ctl->index % nsize;
 	pgoff_t pgoff = ctl->index / nsize;
 
 	if (!ctl->page || pgoff != page_index(ctl->page)) {

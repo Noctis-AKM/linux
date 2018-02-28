@@ -43,7 +43,7 @@ int ceph_readpage_from_fscache(struct inode *inode, struct page *page);
 int ceph_readpages_from_fscache(struct inode *inode,
 				struct address_space *mapping,
 				struct list_head *pages,
-				unsigned *nr_pages);
+				unsigned int *nr_pages);
 void ceph_readpage_to_fscache(struct inode *inode, struct page *page);
 void ceph_invalidate_fscache_page(struct inode* inode, struct page *page);
 
@@ -147,7 +147,7 @@ static inline int ceph_readpage_from_fscache(struct inode* inode,
 static inline int ceph_readpages_from_fscache(struct inode *inode,
 					      struct address_space *mapping,
 					      struct list_head *pages,
-					      unsigned *nr_pages)
+					      unsigned int *nr_pages)
 {
 	return -ENOBUFS;
 }

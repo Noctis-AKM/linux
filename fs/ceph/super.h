@@ -297,7 +297,7 @@ struct ceph_inode_info {
 	u64 i_inline_version;
 	u32 i_time_warp_seq;
 
-	unsigned i_ceph_flags;
+	unsigned int i_ceph_flags;
 	atomic64_t i_release_count;
 	atomic64_t i_ordered_count;
 	atomic64_t i_complete_seq[2];
@@ -324,7 +324,7 @@ struct ceph_inode_info {
 	 * s_mutex. */
 	struct rb_root i_caps;           /* cap list */
 	struct ceph_cap *i_auth_cap;     /* authoritative cap, if any */
-	unsigned i_dirty_caps, i_flushing_caps;     /* mask of dirtied fields */
+	unsigned int i_dirty_caps, i_flushing_caps; /* mask of dirtied fields */
 	struct list_head i_dirty_item, i_flushing_item;
 	/* we need to track cap writeback on a per-cap-bit basis, to allow
 	 * overlapping, pipelined cap flushes to the mds.  we can probably
@@ -339,7 +339,7 @@ struct ceph_inode_info {
 	struct list_head i_cap_snaps;   /* snapped state pending flush to mds */
 	struct ceph_snap_context *i_head_snapc;  /* set if wr_buffer_head > 0 or
 						    dirty|flushing caps */
-	unsigned i_snap_caps;           /* cap bits for snapped files */
+	unsigned int i_snap_caps;           /* cap bits for snapped files */
 
 	int i_nr_by_mode[CEPH_FILE_MODE_BITS];  /* open file counts */
 
@@ -688,7 +688,7 @@ struct ceph_dir_file_info {
 	struct ceph_mds_request *last_readdir;
 
 	/* readdir: position within a frag */
-	unsigned next_offset;  /* offset of next chunk (last_name's + 1) */
+	unsigned int next_offset;  /* offset of next chunk (last_name's + 1) */
 	char *last_name;       /* last entry in previous chunk */
 	long long dir_release_count;
 	long long dir_ordered_count;
@@ -977,8 +977,9 @@ extern struct ceph_cap *ceph_get_cap(struct ceph_mds_client *mdsc,
 				     struct ceph_cap_reservation *ctx);
 extern void ceph_add_cap(struct inode *inode,
 			 struct ceph_mds_session *session, u64 cap_id,
-			 int fmode, unsigned issued, unsigned wanted,
-			 unsigned cap, unsigned seq, u64 realmino, int flags,
+			 int fmode, unsigned int issued, unsigned int wanted,
+			 unsigned int cap, unsigned int seq,
+			 u64 realmino, int flags,
 			 struct ceph_cap **new_cap);
 extern void __ceph_remove_cap(struct ceph_cap *cap, bool queue_release);
 extern void ceph_put_cap(struct ceph_mds_client *mdsc,
@@ -1036,7 +1037,7 @@ extern const struct file_operations ceph_file_fops;
 extern int ceph_renew_caps(struct inode *inode);
 extern int ceph_open(struct inode *inode, struct file *file);
 extern int ceph_atomic_open(struct inode *dir, struct dentry *dentry,
-			    struct file *file, unsigned flags, umode_t mode,
+			    struct file *file, unsigned int flags, umode_t mode,
 			    int *opened);
 extern int ceph_release(struct inode *inode, struct file *filp);
 extern void ceph_fill_inline_data(struct inode *inode, struct page *locked_page,
@@ -1049,7 +1050,8 @@ extern const struct inode_operations ceph_dir_iops;
 extern const struct inode_operations ceph_snapdir_iops;
 extern const struct dentry_operations ceph_dentry_ops;
 
-extern loff_t ceph_make_fpos(unsigned high, unsigned off, bool hash_order);
+extern loff_t ceph_make_fpos(unsigned int high, unsigned int off,
+				bool hash_order);
 extern int ceph_handle_notrace_create(struct inode *dir, struct dentry *dentry);
 extern int ceph_handle_snapdir(struct ceph_mds_request *req,
 			       struct dentry *dentry, int err);
@@ -1060,7 +1062,7 @@ extern void ceph_dentry_lru_add(struct dentry *dn);
 extern void ceph_dentry_lru_touch(struct dentry *dn);
 extern void ceph_dentry_lru_del(struct dentry *dn);
 extern void ceph_invalidate_dentry_lease(struct dentry *dentry);
-extern unsigned ceph_dentry_hash(struct inode *dir, struct dentry *dn);
+extern unsigned int ceph_dentry_hash(struct inode *dir, struct dentry *dn);
 extern void ceph_readdir_cache_release(struct ceph_readdir_cache_control *ctl);
 
 /* ioctl.c */

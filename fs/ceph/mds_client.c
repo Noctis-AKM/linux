@@ -48,7 +48,7 @@
 struct ceph_reconnect_state {
 	int nr_caps;
 	struct ceph_pagelist *pagelist;
-	unsigned msg_version;
+	unsigned int msg_version;
 };
 
 static void __wake_requests(struct ceph_mds_client *mdsc,
@@ -1838,7 +1838,7 @@ char *ceph_mdsc_build_path(struct dentry *dentry, int *plen, u64 *base,
 	struct dentry *temp;
 	char *path;
 	int len, pos;
-	unsigned seq;
+	unsigned int seq;
 
 	if (!dentry)
 		return ERR_PTR(-EINVAL);
@@ -3525,7 +3525,7 @@ static void lock_unlock_sessions(struct ceph_mds_client *mdsc)
 static void schedule_delayed(struct ceph_mds_client *mdsc)
 {
 	int delay = 5;
-	unsigned hz = round_jiffies_relative(HZ * delay);
+	unsigned int hz = round_jiffies_relative(HZ * delay);
 	schedule_delayed_work(&mdsc->delayed_work, hz);
 }
 

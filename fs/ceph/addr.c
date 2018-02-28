@@ -435,7 +435,7 @@ out:
  * the caller (VM) cleans them up.
  */
 static int ceph_readpages(struct file *file, struct address_space *mapping,
-			  struct list_head *page_list, unsigned nr_pages)
+			  struct list_head *page_list, unsigned int nr_pages)
 {
 	struct inode *inode = file_inode(file);
 	struct ceph_fs_client *fsc = ceph_inode_to_client(inode);
@@ -867,7 +867,7 @@ retry:
 
 	while (!done && index <= end) {
 		int num_ops = 0, op_idx;
-		unsigned i, pvec_pages, max_pages, locked_pages = 0;
+		unsigned int i, pvec_pages, max_pages, locked_pages = 0;
 		struct page **pages = NULL, **data_pages;
 		mempool_t *pool = NULL;	/* Becomes non-null if mempool used */
 		struct page *page;
@@ -1011,7 +1011,7 @@ get_more_pages:
 		if (!locked_pages)
 			goto release_pvec_pages;
 		if (i) {
-			unsigned j, n = 0;
+			unsigned int j, n = 0;
 			/* shift unused page to beginning of pvec */
 			for (j = 0; j < pvec_pages; j++) {
 				if (!pvec.pages[j])
@@ -1166,7 +1166,7 @@ release_pvec_pages:
 		    start_index == 0 && /* all dirty pages were checked */
 		    !ceph_wbc.head_snapc) {
 			struct page *page;
-			unsigned i, nr;
+			unsigned int i, nr;
 			index = 0;
 			while ((index <= end) &&
 			       (nr = pagevec_lookup_tag(&pvec, mapping, &index,
@@ -1221,7 +1221,7 @@ static int context_is_writeable_or_written(struct inode *inode,
  * or any failure (incl -EAGAIN) with page unlocked.
  */
 static int ceph_update_writeable_page(struct file *file,
-			    loff_t pos, unsigned len,
+			    loff_t pos, unsigned int len,
 			    struct page *page)
 {
 	struct inode *inode = file_inode(file);
@@ -1323,7 +1323,7 @@ fail_unlock:
  * clean, or already dirty within the same snap context.
  */
 static int ceph_write_begin(struct file *file, struct address_space *mapping,
-			    loff_t pos, unsigned len, unsigned flags,
+			    loff_t pos, unsigned int len, unsigned int flags,
 			    struct page **pagep, void **fsdata)
 {
 	struct inode *inode = file_inode(file);
@@ -1355,7 +1355,7 @@ static int ceph_write_begin(struct file *file, struct address_space *mapping,
  * except adjust dirty page accounting
  */
 static int ceph_write_end(struct file *file, struct address_space *mapping,
-			  loff_t pos, unsigned len, unsigned copied,
+			  loff_t pos, unsigned int len, unsigned int copied,
 			  struct page *page, void *fsdata)
 {
 	struct inode *inode = file_inode(file);

@@ -328,7 +328,7 @@ out:
  * file or symlink, return 1 so the VFS can retry.
  */
 int ceph_atomic_open(struct inode *dir, struct dentry *dentry,
-		     struct file *file, unsigned flags, umode_t mode,
+		     struct file *file, unsigned int flags, umode_t mode,
 		     int *opened)
 {
 	struct ceph_fs_client *fsc = ceph_sb_to_client(dir->i_sb);
@@ -542,7 +542,7 @@ static ssize_t ceph_sync_read(struct kiocb *iocb, struct iov_iter *to,
 	ssize_t ret;
 	size_t len = iov_iter_count(to);
 
-	dout("sync_read on file %p %llu~%u %s\n", file, off, (unsigned)len,
+	dout("sync_read on file %p %llu~%u %s\n", file, off, (unsigned int)len,
 	     (file->f_flags & O_DIRECT) ? "O_DIRECT" : "");
 
 	if (!len)
@@ -618,7 +618,7 @@ struct ceph_aio_request {
 	bool should_dirty;
 	int error;
 	struct list_head osd_reqs;
-	unsigned num_reqs;
+	unsigned int num_reqs;
 	atomic_t pending_reqs;
 	struct timespec mtime;
 	struct ceph_cap_flush *prealloc_cf;
@@ -828,7 +828,7 @@ ceph_direct_read_write(struct kiocb *iocb, struct iov_iter *iter,
 		return -EROFS;
 
 	dout("sync_direct_%s on file %p %lld~%u snapc %p seq %lld\n",
-	     (write ? "write" : "read"), file, pos, (unsigned)count,
+	     (write ? "write" : "read"), file, pos, (unsigned int)count,
 	     snapc, snapc->seq);
 
 	ret = filemap_write_and_wait_range(inode->i_mapping, pos, pos + count);
@@ -1034,7 +1034,7 @@ ceph_sync_write(struct kiocb *iocb, struct iov_iter *from, loff_t pos,
 		return -EROFS;
 
 	dout("sync_write on file %p %lld~%u snapc %p seq %lld\n",
-	     file, pos, (unsigned)count, snapc, snapc->seq);
+	     file, pos, (unsigned int)count, snapc, snapc->seq);
 
 	ret = filemap_write_and_wait_range(inode->i_mapping, pos, pos + count);
 	if (ret < 0)
@@ -1150,7 +1150,7 @@ static ssize_t ceph_read_iter(struct kiocb *iocb, struct iov_iter *to)
 
 again:
 	dout("aio_read %p %llx.%llx %llu~%u trying to get caps on %p\n",
-	     inode, ceph_vinop(inode), iocb->ki_pos, (unsigned)len, inode);
+	     inode, ceph_vinop(inode), iocb->ki_pos, (unsigned int)len, inode);
 
 	if (fi->fmode & CEPH_FILE_MODE_LAZY)
 		want = CEPH_CAP_FILE_CACHE | CEPH_CAP_FILE_LAZYIO;
@@ -1165,7 +1165,7 @@ again:
 	    (fi->flags & CEPH_F_SYNC)) {
 
 		dout("aio_sync_read %p %llx.%llx %llu~%u got cap refs on %s\n",
-		     inode, ceph_vinop(inode), iocb->ki_pos, (unsigned)len,
+		     inode, ceph_vinop(inode), iocb->ki_pos, (unsigned int)len,
 		     ceph_cap_string(got));
 
 		if (ci->i_inline_version == CEPH_INLINE_NONE) {
@@ -1183,7 +1183,7 @@ again:
 	} else {
 		CEPH_DEFINE_RW_CONTEXT(rw_ctx, got);
 		dout("aio_read %p %llx.%llx %llu~%u got cap refs on %s\n",
-		     inode, ceph_vinop(inode), iocb->ki_pos, (unsigned)len,
+		     inode, ceph_vinop(inode), iocb->ki_pos, (unsigned int)len,
 		     ceph_cap_string(got));
 		ceph_add_rw_context(fi, &rw_ctx);
 		ret = generic_file_read_iter(iocb, to);
@@ -1411,13 +1411,13 @@ retry_snap:
 	}
 
 	dout("aio_write %p %llx.%llx %llu~%u  dropping cap refs on %s\n",
-	     inode, ceph_vinop(inode), pos, (unsigned)count,
+	     inode, ceph_vinop(inode), pos, (unsigned int)count,
 	     ceph_cap_string(got));
 	ceph_put_cap_refs(ci, got);
 
 	if (written == -EOLDSNAPC) {
 		dout("aio_write %p %llx.%llx %llu~%u" "got EOLDSNAPC, retrying\n",
-		     inode, ceph_vinop(inode), pos, (unsigned)count);
+		     inode, ceph_vinop(inode), pos, (unsigned int)count);
 		goto retry_snap;
 	}
 
@@ -1495,7 +1495,7 @@ out:
 }
 
 static inline void ceph_zero_partial_page(
-	struct inode *inode, loff_t offset, unsigned size)
+	struct inode *inode, loff_t offset, unsigned int size)
 {
 	struct page *page;
 	pgoff_t index = offset >> PAGE_SHIFT;

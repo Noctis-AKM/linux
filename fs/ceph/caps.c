@@ -586,9 +586,9 @@ static void __cap_delay_cancel(struct ceph_mds_client *mdsc,
  * Common issue checks for add_cap, handle_cap_grant.
  */
 static void __check_cap_issue(struct ceph_inode_info *ci, struct ceph_cap *cap,
-			      unsigned issued)
+			      unsigned int issued)
 {
-	unsigned had = __ceph_caps_issued(ci, NULL);
+	unsigned int had = __ceph_caps_issued(ci, NULL);
 
 	/*
 	 * Each time we receive FILE_CACHE anew, we increment
@@ -626,8 +626,8 @@ static void __check_cap_issue(struct ceph_inode_info *ci, struct ceph_cap *cap,
  */
 void ceph_add_cap(struct inode *inode,
 		  struct ceph_mds_session *session, u64 cap_id,
-		  int fmode, unsigned issued, unsigned wanted,
-		  unsigned seq, unsigned mseq, u64 realmino, int flags,
+		  int fmode, unsigned int issued, unsigned int wanted,
+		  unsigned int seq, unsigned int mseq, u64 realmino, int flags,
 		  struct ceph_cap **new_cap)
 {
 	struct ceph_mds_client *mdsc = ceph_inode_to_client(inode)->mdsc;
@@ -3300,7 +3300,7 @@ static void handle_cap_flush_ack(struct inode *inode, u64 flush_tid,
 	struct ceph_mds_client *mdsc = ceph_sb_to_client(inode->i_sb)->mdsc;
 	struct ceph_cap_flush *cf, *tmp_cf;
 	LIST_HEAD(to_remove);
-	unsigned seq = le32_to_cpu(m->seq);
+	unsigned int seq = le32_to_cpu(m->seq);
 	int dirty = le32_to_cpu(m->dirty);
 	int cleaned = 0;
 	bool drop = false;
@@ -3506,8 +3506,8 @@ static void handle_cap_export(struct inode *inode, struct ceph_mds_caps *ex,
 	struct ceph_cap *cap, *tcap, *new_cap = NULL;
 	struct ceph_inode_info *ci = ceph_inode(inode);
 	u64 t_cap_id;
-	unsigned mseq = le32_to_cpu(ex->migrate_seq);
-	unsigned t_seq, t_mseq;
+	unsigned int mseq = le32_to_cpu(ex->migrate_seq);
+	unsigned int t_seq, t_mseq;
 	int target, issued;
 	int mds = session->s_mds;
 
@@ -3646,10 +3646,10 @@ static void handle_cap_import(struct ceph_mds_client *mdsc,
 	struct ceph_cap *cap, *ocap, *new_cap = NULL;
 	int mds = session->s_mds;
 	int issued;
-	unsigned caps = le32_to_cpu(im->caps);
-	unsigned wanted = le32_to_cpu(im->wanted);
-	unsigned seq = le32_to_cpu(im->seq);
-	unsigned mseq = le32_to_cpu(im->migrate_seq);
+	unsigned int caps = le32_to_cpu(im->caps);
+	unsigned int wanted = le32_to_cpu(im->wanted);
+	unsigned int seq = le32_to_cpu(im->seq);
+	unsigned int mseq = le32_to_cpu(im->migrate_seq);
 	u64 realmino = le64_to_cpu(im->realm);
 	u64 cap_id = le64_to_cpu(im->cap_id);
 	u64 p_cap_id;
@@ -3828,7 +3828,7 @@ void ceph_handle_caps(struct ceph_mds_session *session,
 	mutex_lock(&session->s_mutex);
 	session->s_seq++;
 	dout(" mds%d seq %lld cap seq %u\n", session->s_mds, session->s_seq,
-	     (unsigned)seq);
+	     (unsigned int)seq);
 
 	if (!inode) {
 		dout(" i don't have ino %llx\n", vino.ino);
