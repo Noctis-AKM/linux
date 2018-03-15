@@ -345,6 +345,7 @@ struct rbd_device {
 	unsigned long		flags;		/* possibly lock protected */
 	struct rbd_spec		*spec;
 	struct rbd_options	*opts;
+	bool			read_only_need_restore;
 	char			*config_info;	/* add{,_single_major} string */
 
 	struct ceph_object_id	header_oid;
@@ -4561,17 +4562,6 @@ static int _rbd_dev_v2_snap_features(struct rbd_device *rbd_dev, u64 snap_id,
 	return 0;
 }
 
-static int rbd_dev_v2_features(struct rbd_device *rbd_dev)
-{
-	u64 features = 0;
-	int ret = _rbd_dev_v2_snap_features(rbd_dev, CEPH_NOSNAP, features);
-	if (ret)
-		return ret
-
-	rbd_dev->header.features = features
-	return 0;
-}
-
 static int rbd_dev_v2_parent_info(struct rbd_device *rbd_dev)
 {
 	struct rbd_spec *parent_spec;
@@ -5036,11 +5026,34 @@ out:
 static int rbd_dev_v2_header_info(struct rbd_device *rbd_dev)
 {
 	bool first_time = rbd_dev->header.object_prefix == NULL;
+	u64 features = 0;
 	int ret;
 
 	ret = rbd_dev_v2_image_size(rbd_dev);
 	if (ret)
 		return ret;
+
+	ret = _rbd_dev_v2_snap_features(rbd_dev, CEPH_NOSNAP,
+					&features);
+	if (ret) {
+		if (-ENXIO == ret && !first_time) {
+			if (!rbd_dev->opts->read_only) {
+				rbd_dev->opts->read_only = true;
+				rbd_dev->read_only_need_restore = true;
+				set_disk_ro(rbd_dev->disk,
+						rbd_dev->opts->read_only);
+			}
+		} else {
+			return ret;
+		}
+	} else {
+		if (rbd_dev->read_only_need_restore) {
+			rbd_dev->opts->read_only = false;
+			rbd_dev->read_only_need_restore = false;
+			set_disk_ro(rbd_dev->disk, rbd_dev->opts->read_only);
+		}
+	}
+	rbd_dev->mapping.features = rbd_dev->header.features = features;
 
 	if (first_time) {
 		ret = rbd_dev_v2_header_onetime(rbd_dev);
@@ -5413,14 +5426,6 @@ static int rbd_dev_v2_header_onetime(struct rbd_device *rbd_dev)
 	if (ret)
 		goto out_err;
 
-	/*
-	 * Get the and check features for the image.  Currently the
-	 * features are assumed to never change.
-	 */
-	ret = rbd_dev_v2_features(rbd_dev);
-	if (ret)
-		goto out_err;
-
 	/* If the image supports fancy striping, get its parameters */
 
 	if (rbd_dev->header.features & RBD_FEATURE_STRIPINGV2) {
@@ -5731,6 +5736,7 @@ static ssize_t do_rbd_add(struct bus_type *bus,
 		goto err_out_rbd_dev;
 	}
 
+	rbd_dev->read_only_need_restore = false;
 	/* If we are mapping a snapshot it must be marked read-only */
 	if (rbd_dev->spec->snap_id != CEPH_NOSNAP)
 		rbd_dev->opts->read_only = true;
