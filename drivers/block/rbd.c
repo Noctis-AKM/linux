@@ -4544,13 +4544,6 @@ static int _rbd_dev_v2_snap_features(struct rbd_device *rbd_dev, u64 snap_id,
 	if (ret < sizeof (features_buf))
 		return -ERANGE;
 
-	unsup = le64_to_cpu(features_buf.incompat) & ~RBD_FEATURES_SUPPORTED;
-	if (unsup) {
-		rbd_warn(rbd_dev, "image uses unsupported features: 0x%llx",
-			 unsup);
-		return -ENXIO;
-	}
-
 	*snap_features = le64_to_cpu(features_buf.features);
 
 	dout("  snap_id 0x%016llx features = 0x%016llx incompat = 0x%016llx\n",
@@ -4558,13 +4551,25 @@ static int _rbd_dev_v2_snap_features(struct rbd_device *rbd_dev, u64 snap_id,
 		(unsigned long long)*snap_features,
 		(unsigned long long)le64_to_cpu(features_buf.incompat));
 
+	unsup = le64_to_cpu(features_buf.incompat) & ~RBD_FEATURES_SUPPORTED;
+	if (unsup) {
+		rbd_warn(rbd_dev, "image uses unsupported features: 0x%llx",
+			 unsup);
+		return -ENXIO;
+	}
+
 	return 0;
 }
 
 static int rbd_dev_v2_features(struct rbd_device *rbd_dev)
 {
-	return _rbd_dev_v2_snap_features(rbd_dev, CEPH_NOSNAP,
-						&rbd_dev->header.features);
+	u64 features = 0;
+	int ret = _rbd_dev_v2_snap_features(rbd_dev, CEPH_NOSNAP, features);
+	if (ret)
+		return ret
+
+	rbd_dev->header.features = features
+	return 0;
 }
 
 static int rbd_dev_v2_parent_info(struct rbd_device *rbd_dev)
