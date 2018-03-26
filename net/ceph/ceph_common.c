@@ -550,7 +550,7 @@ out:
 }
 EXPORT_SYMBOL(ceph_parse_options);
 
-int ceph_print_client_options(struct seq_file *m, struct ceph_client *client)
+int ceph_print_client_options(struct seq_file *m, struct ceph_client *client, bool skip_default)
 {
 	struct ceph_options *opt = client->options;
 	size_t pos = m->count;
@@ -576,16 +576,16 @@ int ceph_print_client_options(struct seq_file *m, struct ceph_client *client)
 	if ((opt->flags & CEPH_OPT_TCP_NODELAY) == 0)
 		seq_puts(m, "notcp_nodelay,");
 
-	if (opt->mount_timeout != CEPH_MOUNT_TIMEOUT_DEFAULT)
+	if (opt->mount_timeout != CEPH_MOUNT_TIMEOUT_DEFAULT || !skip_default)
 		seq_printf(m, "mount_timeout=%d,",
 			   jiffies_to_msecs(opt->mount_timeout) / 1000);
-	if (opt->osd_idle_ttl != CEPH_OSD_IDLE_TTL_DEFAULT)
+	if (opt->osd_idle_ttl != CEPH_OSD_IDLE_TTL_DEFAULT || !skip_default)
 		seq_printf(m, "osd_idle_ttl=%d,",
 			   jiffies_to_msecs(opt->osd_idle_ttl) / 1000);
-	if (opt->osd_keepalive_timeout != CEPH_OSD_KEEPALIVE_DEFAULT)
+	if (opt->osd_keepalive_timeout != CEPH_OSD_KEEPALIVE_DEFAULT || !skip_default)
 		seq_printf(m, "osdkeepalivetimeout=%d,",
 		    jiffies_to_msecs(opt->osd_keepalive_timeout) / 1000);
-	if (opt->osd_request_timeout != CEPH_OSD_REQUEST_TIMEOUT_DEFAULT)
+	if (opt->osd_request_timeout != CEPH_OSD_REQUEST_TIMEOUT_DEFAULT || !skip_default)
 		seq_printf(m, "osd_request_timeout=%d,",
 			   jiffies_to_msecs(opt->osd_request_timeout) / 1000);
 
