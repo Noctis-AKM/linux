@@ -4205,6 +4205,26 @@ static ssize_t rbd_image_refresh(struct device *dev,
 	return size;
 }
 
+static ssize_t rbd_options_show(struct device *dev,
+			     struct device_attribute *attr, char *buf)
+{
+	struct rbd_device *rbd_dev = dev_to_rbd_dev(dev);
+	unsigned long long lock_timeout =
+		jiffies_to_msecs(rbd_dev->opts->lock_timeout) / 1000;
+	ssize_t len = 0;
+
+	len = sprintf(buf, "queue_depth=%llu",
+			(unsigned long long)rbd_dev->opts->queue_depth);
+	len += sprintf(buf + len, ",lock_timeout=%llu", lock_timeout);
+	len += sprintf(buf + len, ",read_only=%s",
+			rbd_dev->opts->read_only? "true" : "false");
+	len += sprintf(buf + len, ",lock_on_read=%s",
+			rbd_dev->opts->lock_on_read? "true" : "false");
+	len += sprintf(buf + len, ",exclusive=%s\n",
+			rbd_dev->opts->exclusive? "true" : "false");
+	return len;
+}
+
 static DEVICE_ATTR(size, S_IRUGO, rbd_size_show, NULL);
 static DEVICE_ATTR(features, S_IRUGO, rbd_features_show, NULL);
 static DEVICE_ATTR(major, S_IRUGO, rbd_major_show, NULL);
@@ -4221,6 +4241,7 @@ static DEVICE_ATTR(refresh, S_IWUSR, NULL, rbd_image_refresh);
 static DEVICE_ATTR(current_snap, S_IRUGO, rbd_snap_show, NULL);
 static DEVICE_ATTR(snap_id, S_IRUGO, rbd_snap_id_show, NULL);
 static DEVICE_ATTR(parent, S_IRUGO, rbd_parent_show, NULL);
+static DEVICE_ATTR(rbd_options, S_IRUGO, rbd_options_show, NULL);
 
 static struct attribute *rbd_attrs[] = {
 	&dev_attr_size.attr,
@@ -4239,6 +4260,7 @@ static struct attribute *rbd_attrs[] = {
 	&dev_attr_snap_id.attr,
 	&dev_attr_parent.attr,
 	&dev_attr_refresh.attr,
+	&dev_attr_rbd_options.attr,
 	NULL
 };
 
