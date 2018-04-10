@@ -3007,7 +3007,17 @@ static void rbd_acquire_lock(struct work_struct *work)
 again:
 	lock_state = rbd_try_acquire_lock(rbd_dev, &ret);
 	if (lock_state != RBD_LOCK_STATE_UNLOCKED || ret == -EBLACKLISTED) {
+		bool need_wakeup = false;
+
+		if (ret == -EBLACKLISTED) {
+			down_write(&rbd_dev->lock_rwsem);
+			set_bit(RBD_DEV_FLAG_BLACKLISTED, &rbd_dev->flags);
+			up_write(&rbd_dev->lock_rwsem);
+			need_wakeup = true;
+		}
 		if (lock_state == RBD_LOCK_STATE_LOCKED)
+			need_wakeup = true;
+		if (need_wakeup)
 			wake_requests(rbd_dev, true);
 		dout("%s rbd_dev %p lock_state %d ret %d - done\n", __func__,
 		     rbd_dev, lock_state, ret);
