@@ -4907,6 +4907,8 @@ int ceph_osdc_call(struct ceph_osd_client *osdc,
 	ceph_oid_copy(&req->r_base_oid, oid);
 	ceph_oloc_copy(&req->r_base_oloc, oloc);
 	req->r_flags = flags;
+	if (req->r_flags & CEPH_OSD_FLAG_WRITE)
+		req->r_abort_on_full = true;
 
 	ret = ceph_osdc_alloc_messages(req, GFP_NOIO);
 	if (ret)
