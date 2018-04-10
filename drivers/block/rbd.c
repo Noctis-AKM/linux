@@ -3025,7 +3025,9 @@ again:
 		 * want to block.
 		 */
 		if (!(rbd_dev->disk->flags & GENHD_FL_UP)) {
+			down_write(&rbd_dev->lock_rwsem);
 			set_bit(RBD_DEV_FLAG_BLACKLISTED, &rbd_dev->flags);
+			up_write(&rbd_dev->lock_rwsem);
 			/* wake "rbd map --exclusive" process */
 			wake_requests(rbd_dev, false);
 		}
@@ -3471,7 +3473,9 @@ static void rbd_reregister_watch(struct work_struct *work)
 	if (ret) {
 		rbd_warn(rbd_dev, "failed to reregister watch: %d", ret);
 		if (ret == -EBLACKLISTED || ret == -ENOENT) {
+			down_write(&rbd_dev->lock_rwsem);
 			set_bit(RBD_DEV_FLAG_BLACKLISTED, &rbd_dev->flags);
+			up_write(&rbd_dev->lock_rwsem);
 			wake_requests(rbd_dev, true);
 		} else {
 			queue_delayed_work(rbd_dev->task_wq,
