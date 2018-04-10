@@ -3588,6 +3588,23 @@ static int rbd_wait_state_locked(struct rbd_device *rbd_dev, bool may_acquire)
 		return -EROFS;
 	}
 
+	up_read(&rbd_dev->lock_rwsem);
+	rbd_try_acquire_lock(rbd_dev, &ret);
+	if (ret == -EBLACKLISTED) {
+		down_write(&rbd_dev->lock_rwsem);
+		set_bit(RBD_DEV_FLAG_BLACKLISTED, &rbd_dev->flags);
+		up_write(&rbd_dev->lock_rwsem);
+		down_read(&rbd_dev->lock_rwsem);
+		goto out;
+	}
+	down_read(&rbd_dev->lock_rwsem);
+
+	if (ret == -ENOSPC)
+		goto out;
+
+	if (rbd_dev->lock_state == RBD_LOCK_STATE_LOCKED)
+		goto out;
+
 	do {
 		/*
 		 * Note the use of mod_delayed_work() in rbd_acquire_lock()
@@ -3613,6 +3630,8 @@ static int rbd_wait_state_locked(struct rbd_device *rbd_dev, bool may_acquire)
 	} while (rbd_dev->lock_state != RBD_LOCK_STATE_LOCKED);
 
 	finish_wait(&rbd_dev->lock_waitq, &wait);
+
+out:
 	return ret;
 }
 
