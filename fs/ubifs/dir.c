@@ -111,11 +111,6 @@ struct inode *ubifs_new_inode(struct ubifs_info *c, const struct inode *dir,
 			 ubifs_current_time(inode);
 	inode->i_mapping->nrpages = 0;
 
-	dquot_initialize(inode);
-        err = dquot_alloc_inode(inode);
-        if (err)
-                goto fail_drop;
-
 	switch (mode & S_IFMT) {
 	case S_IFREG:
 		inode->i_mapping->a_ops = &ubifs_file_address_operations;
@@ -155,8 +150,8 @@ struct inode *ubifs_new_inode(struct ubifs_info *c, const struct inode *dir,
 			spin_unlock(&c->cnt_lock);
 			ubifs_err(c, "out of inode numbers");
 			make_bad_inode(inode);
-			err = -EINVAL;
-			goto fail_free;
+			iput(inode);
+			return ERR_PTR(-EINVAL);
 		}
 		ubifs_warn(c, "running out of inode numbers (current %lu, max %u)",
 			   (unsigned long)c->highest_inum, INUM_WATERMARK);
@@ -173,13 +168,6 @@ struct inode *ubifs_new_inode(struct ubifs_info *c, const struct inode *dir,
 	ui->creat_sqnum = ++c->max_sqnum;
 	spin_unlock(&c->cnt_lock);
 	return inode;
-
-fail_free:
-	dquot_free_inode(inode);
-fail_drop:
-	dquot_drop(inode);
-	iput(inode);
-	return ERR_PTR(err);
 }
 
 static int dbg_check_name(const struct ubifs_info *c,
@@ -284,6 +272,11 @@ static int ubifs_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 		goto out_budg;
 	}
 
+	dquot_initialize(inode);
+	err = dquot_alloc_inode(inode);
+	if (err)
+		goto fail_drop;
+
 	err = ubifs_init_security(dir, inode, &dentry->d_name);
 	if (err)
 		goto out_inode;
@@ -307,6 +300,9 @@ out_cancel:
 	dir_ui->ui_size = dir->i_size;
 	mutex_unlock(&dir_ui->ui_mutex);
 out_inode:
+	dquot_free_inode(inode);
+fail_drop:
+	dquot_drop(inode);
 	make_bad_inode(inode);
 	iput(inode);
 out_budg:
@@ -745,6 +741,11 @@ static int ubifs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 		goto out_budg;
 	}
 
+	dquot_initialize(inode);
+	err = dquot_alloc_inode(inode);
+	if (err)
+		goto fail_drop;
+
 	err = ubifs_init_security(dir, inode, &dentry->d_name);
 	if (err)
 		goto out_inode;
@@ -773,6 +774,9 @@ out_cancel:
 	drop_nlink(dir);
 	mutex_unlock(&dir_ui->ui_mutex);
 out_inode:
+	dquot_free_inode(inode);
+fail_drop:
+	dquot_drop(inode);
 	make_bad_inode(inode);
 	iput(inode);
 out_budg:
@@ -824,6 +828,11 @@ static int ubifs_mknod(struct inode *dir, struct dentry *dentry,
 		goto out_budg;
 	}
 
+	dquot_initialize(inode);
+	err = dquot_alloc_inode(inode);
+	if (err)
+		goto fail_drop;
+
 	init_special_inode(inode, inode->i_mode, rdev);
 	inode->i_size = ubifs_inode(inode)->ui_size = devlen;
 	ui = ubifs_inode(inode);
@@ -853,6 +862,9 @@ out_cancel:
 	dir_ui->ui_size = dir->i_size;
 	mutex_unlock(&dir_ui->ui_mutex);
 out_inode:
+	dquot_free_inode(inode);
+fail_drop:
+	dquot_drop(inode);
 	make_bad_inode(inode);
 	iput(inode);
 out_budg:
@@ -893,6 +905,11 @@ static int ubifs_symlink(struct inode *dir, struct dentry *dentry,
 		err = PTR_ERR(inode);
 		goto out_budg;
 	}
+
+	dquot_initialize(inode);
+	err = dquot_alloc_inode(inode);
+	if (err)
+		goto fail_drop;
 
 	ui = ubifs_inode(inode);
 	ui->data = kmalloc(len + 1, GFP_NOFS);
@@ -935,6 +952,9 @@ out_cancel:
 	dir_ui->ui_size = dir->i_size;
 	mutex_unlock(&dir_ui->ui_mutex);
 out_inode:
+	dquot_free_inode(inode);
+fail_drop:
+	dquot_drop(inode);
 	make_bad_inode(inode);
 	iput(inode);
 out_budg:
